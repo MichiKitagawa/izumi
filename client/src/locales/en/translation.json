@@ -1,0 +1,27 @@
+{
+    "Welcome": "Welcome to izumi",
+    "Register": "Register",
+    "Login": "Login",
+    "Profile": "Profile",
+    "Subscription": "Subscription",
+    "AI Processing": "AI Processing",
+    "Products": "Products",
+    "Admin": "Admin",
+    "Upload Product": "Upload Product",
+    "Revenue Report": "Revenue Report",
+    "User Logs": "User Logs",
+    "Ad Banner": "Ad Banner",
+    "Download": "Download",
+    "Download Started": "Download started.",
+    "Download Failed": "Download failed.",
+    "Subscribe": "Subscribe",
+    "Change Plan": "Change Plan",
+    "Cancel Subscription": "Cancel Subscription",
+    "Subscription Success": "Subscribed successfully.",
+    "Subscription Failed": "Subscription failed.",
+    "Plan Change Success": "Subscription plan updated successfully.",
+    "Plan Change Failed": "Plan change failed.",
+    "Cancellation Success": "Subscription canceled successfully.",
+    "Cancellation Failed": "Cancellation failed."
+  }
+  
