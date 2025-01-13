@@ -4,21 +4,31 @@ import axios from 'axios';
 import { Container, Typography } from '@mui/material';
 
 const RevenueReport: React.FC = () => {
-  const [report, setReport] = useState<any>(null);
+  interface ReportData {
+    subscriptionRevenue: number;
+    transactionFees: number;
+    totalRevenue: number;
+  }
+
+  const [report, setReport] = useState<ReportData | null>(null);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
     const fetchReport = async () => {
       const token = localStorage.getItem('token');
       try {
-        const res = await axios.get('/api/analytics/revenue-report', {
+        const res = await axios.get<ReportData>('/api/analytics/revenue-report', {
           headers: {
             Authorization: `Bearer ${token}`,
           },
         });
         setReport(res.data);
-      } catch (error: any) {
-        setMessage(error.response?.data?.message || 'Failed to fetch revenue report.');
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          setMessage(error.response?.data?.message || 'Failed to fetch revenue report.');
+        } else {
+          setMessage('An unexpected error occurred.');
+        }
       }
     };
 
@@ -46,5 +56,4 @@ const RevenueReport: React.FC = () => {
     </Container>
   );
 };
-
 export default RevenueReport;

@@ -1,6 +1,7 @@
+// client/src/index.tsx
 import React from 'react';
-import { createRoot } from 'react-dom/client'; // react-dom/client からインポート
-import { BrowserRouter as Router, Routes, Route } from 'react-router-dom';
+import { createRoot } from 'react-dom/client';
+import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
 import App from './App';
 import Register from './pages/Register';
 import Login from './pages/Login';
@@ -11,34 +12,124 @@ import Subscription from './pages/Subscription';
 import AIProcessing from './pages/AIProcessing';
 import RevenueReport from './pages/RevenueReport';
 import ProductDetail from './pages/ProductDetail';
-import './i18n';
 import TermsOfService from './pages/TermsOfService';
 import PrivacyPolicy from './pages/PrivacyPolicy';
+import ProtectedRoute from './components/ProtectedRoute';
+import PublicRoute from './components/PublicRoute';
+import WelcomePage from './pages/WelcomePage';
+import { AuthProvider } from './context/AuthContext';
+import './i18n';
 
-// ルート要素を取得
 const container = document.getElementById('root');
-
-// createRoot を使用してルートを作成
 const root = createRoot(container!);
 
-// アプリケーションをレンダリング
 root.render(
   <React.StrictMode>
-    <Router>
-      <Routes>
-        <Route path="/" element={<App />} />
-        <Route path="/register" element={<Register />} />
-        <Route path="/login" element={<Login />} />
-        <Route path="/profile" element={<Profile />} />
-        <Route path="/subscription" element={<Subscription />} />
-        <Route path="/ai" element={<AIProcessing />} />
-        <Route path="/revenue-report" element={<RevenueReport />} />
-        <Route path="/product/:productId" element={<ProductDetail />} />
-        <Route path="/admin" element={<Admin />} />
-        <Route path="/upload" element={<UploadProduct />} />
-        <Route path="/terms" element={<TermsOfService />} />
-        <Route path="/privacy" element={<PrivacyPolicy />} />
-      </Routes>
-    </Router>
+    <AuthProvider>
+      <Router>
+        <Routes>
+          {/* 初回訪問時のトップページ */}
+          <Route path="/welcome" element={<WelcomePage />} />
+
+          {/* 認証が不要なルートに PublicRoute を適用 */}
+          <Route
+            path="/login"
+            element={
+              <PublicRoute>
+                <Login />
+              </PublicRoute>
+            }
+          />
+          <Route
+            path="/register"
+            element={
+              <PublicRoute>
+                <Register />
+              </PublicRoute>
+            }
+          />
+
+          {/* 認証が必要なルートに ProtectedRoute を適用 */}
+          <Route
+            path="/"
+            element={
+              <ProtectedRoute>
+                <App />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/profile"
+            element={
+              <ProtectedRoute>
+                <Profile />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/admin"
+            element={
+              <ProtectedRoute>
+                <Admin />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/upload"
+            element={
+              <ProtectedRoute>
+                <UploadProduct />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/subscription"
+            element={
+              <ProtectedRoute>
+                <Subscription />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/ai"
+            element={
+              <ProtectedRoute>
+                <AIProcessing />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/revenue-report"
+            element={
+              <ProtectedRoute>
+                <RevenueReport />
+              </ProtectedRoute>
+            }
+          />
+          <Route
+            path="/product/:productId"
+            element={
+              <ProtectedRoute>
+                <ProductDetail />
+              </ProtectedRoute>
+            }
+          />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+
+          {/* デフォルトルートのリダイレクト設定 */}
+          <Route
+            path="*"
+            element={
+              localStorage.getItem('token') ? (
+                <Navigate to="/" replace />
+              ) : (
+                <Navigate to="/welcome" replace />
+              )
+            }
+          />
+        </Routes>
+      </Router>
+    </AuthProvider>
   </React.StrictMode>
 );

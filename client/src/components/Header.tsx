@@ -1,5 +1,5 @@
 // src/components/Header.tsx
-import React from 'react';
+import React, { useContext } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AppBar,
@@ -14,7 +14,7 @@ import {
   Box,
   Drawer,
   List,
-  ListItemButton, // 追加
+  ListItemButton,
   ListItemText,
   Divider,
   SelectChangeEvent,
@@ -25,14 +25,11 @@ import MenuIcon from '@mui/icons-material/Menu';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useTranslation } from 'react-i18next';
 import { useTheme, useMediaQuery } from '@mui/material';
+import AuthContext from '../context/AuthContext';
 
-interface HeaderProps {
-  role: string | null;
-}
-
-const Header: React.FC<HeaderProps> = ({ role }) => {
+const Header: React.FC = () => {
   const { t } = useTranslation();
-  const token = localStorage.getItem('token');
+  const { token, role, setToken, setRole } = useContext(AuthContext);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -53,6 +50,13 @@ const Header: React.FC<HeaderProps> = ({ role }) => {
     setDrawerOpen(open);
   };
 
+  const handleLogout = () => {
+    setToken(null);
+    setRole(null);
+    localStorage.removeItem('token');
+    window.location.href = '/welcome';
+  };
+
   const menuItems = (
     <Box
       sx={{ width: 250 }}
@@ -64,8 +68,13 @@ const Header: React.FC<HeaderProps> = ({ role }) => {
         {/* ドロップダウンメニュー項目 */}
         <ListItemButton>
           <FormControl variant="standard" fullWidth>
-            <InputLabel>{t('国')}</InputLabel>
-            <Select value={country} onChange={handleChange(setCountry)} label={t('国')}>
+            <InputLabel sx={{ color: 'inherit' }}>{t('国')}</InputLabel>
+            <Select
+              value={country}
+              onChange={handleChange(setCountry)}
+              label={t('国')}
+              sx={{ color: 'inherit', borderBottom: '1px solid white' }}
+            >
               <MenuItem value="jp">日本</MenuItem>
               <MenuItem value="us">アメリカ</MenuItem>
               <MenuItem value="uk">イギリス</MenuItem>
@@ -76,8 +85,13 @@ const Header: React.FC<HeaderProps> = ({ role }) => {
         <Divider />
         <ListItemButton>
           <FormControl variant="standard" fullWidth>
-            <InputLabel>{t('タイプ')}</InputLabel>
-            <Select value={type} onChange={handleChange(setType)} label={t('タイプ')}>
+            <InputLabel sx={{ color: 'inherit' }}>{t('タイプ')}</InputLabel>
+            <Select
+              value={type}
+              onChange={handleChange(setType)}
+              label={t('タイプ')}
+              sx={{ color: 'inherit', borderBottom: '1px solid white' }}
+            >
               <MenuItem value="video">動画</MenuItem>
               <MenuItem value="image">画像</MenuItem>
               <MenuItem value="text">テキスト</MenuItem>
@@ -88,8 +102,13 @@ const Header: React.FC<HeaderProps> = ({ role }) => {
         <Divider />
         <ListItemButton>
           <FormControl variant="standard" fullWidth>
-            <InputLabel>{t('料金')}</InputLabel>
-            <Select value={price} onChange={handleChange(setPrice)} label={t('料金')}>
+            <InputLabel sx={{ color: 'inherit' }}>{t('料金')}</InputLabel>
+            <Select
+              value={price}
+              onChange={handleChange(setPrice)}
+              label={t('料金')}
+              sx={{ color: 'inherit', borderBottom: '1px solid white' }}
+            >
               <MenuItem value="free">無料</MenuItem>
               <MenuItem value="paid">有料</MenuItem>
               <MenuItem value="subscription">サブスクリプション</MenuItem>
@@ -99,8 +118,13 @@ const Header: React.FC<HeaderProps> = ({ role }) => {
         <Divider />
         <ListItemButton>
           <FormControl variant="standard" fullWidth>
-            <InputLabel>{t('カテゴリー')}</InputLabel>
-            <Select value={category} onChange={handleChange(setCategory)} label={t('カテゴリー')}>
+            <InputLabel sx={{ color: 'inherit' }}>{t('カテゴリー')}</InputLabel>
+            <Select
+              value={category}
+              onChange={handleChange(setCategory)}
+              label={t('カテゴリー')}
+              sx={{ color: 'inherit', borderBottom: '1px solid white' }}
+            >
               <MenuItem value="business">ビジネス</MenuItem>
               <MenuItem value="lifestyle">ライフスタイル</MenuItem>
               <MenuItem value="education">教育</MenuItem>
@@ -136,7 +160,7 @@ const Header: React.FC<HeaderProps> = ({ role }) => {
                 <ListItemText primary={t('Upload Product')} />
               </ListItemButton>
             )}
-            <ListItemButton component={Link} to="/logout">
+            <ListItemButton onClick={handleLogout}>
               <ListItemText primary={t('Logout')} />
             </ListItemButton>
           </>
@@ -162,7 +186,7 @@ const Header: React.FC<HeaderProps> = ({ role }) => {
           <Typography
             variant="h6"
             component={Link}
-            to="/"
+            to={token ? '/' : '/welcome'}
             sx={{ textDecoration: 'none', color: 'inherit', mr: 2 }}
           >
             izumi
@@ -279,6 +303,9 @@ const Header: React.FC<HeaderProps> = ({ role }) => {
                       {t('Upload Product')}
                     </Button>
                   )}
+                  <Button color="inherit" onClick={handleLogout}>
+                    {t('Logout')}
+                  </Button>
                 </>
               )}
             </Box>
