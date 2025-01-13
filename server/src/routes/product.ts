@@ -37,7 +37,7 @@ router.post(
   authenticateToken,
   authorizeRoles('provider'),
   upload.single('file'),
-  async (req: Request & { user?: { id: string } }, res: Response): Promise<void> => {
+  async (req: Request & { user?: { id: number } }, res: Response): Promise<void> => { // id を number に変更
     const { title, description, category } = req.body;
     const file = req.file;
 
@@ -64,7 +64,7 @@ router.post(
       await s3.send(command);
 
       // S3のファイルURLを生成
-      const fileUrl = `https://${params.Bucket}.s3.${s3.config.region}.amazonaws.com/${params.Key}`;
+      const fileUrl = `http://${params.Bucket}.s3.${s3.config.region}.amazonaws.com/${params.Key}`;
 
       // 商材情報のデータベース保存
       const product = await Product.create({
@@ -74,7 +74,7 @@ router.post(
         fileUrl: fileUrl,
         fileType: file.mimetype.split('/')[1],
         fileSize: file.size,
-        providerId: req.user.id,
+        providerId: req.user.id, // number 型として扱う
       });
 
       res.status(201).json({ message: 'Product uploaded successfully.', product });
@@ -96,7 +96,7 @@ router.get('/list', async (req: Request, res: Response) => {
     console.error(error);
     res.status(500).json({ message: '商材一覧の取得に失敗しました。' });
   }
-}); // 修正: 閉じ括弧とセミコロンを確認
+});
 
 // 商材詳細取得API
 router.get('/:id', async (req: Request, res: Response) => {

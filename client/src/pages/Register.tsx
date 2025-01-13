@@ -1,7 +1,6 @@
-// src/pages/Register.tsx
+// client/src/pages/Register.tsx
 import React, { useState } from 'react';
-import axios from 'axios';
-import { TextField, Button, Container, Typography } from '@mui/material';
+import { register } from '../api'; // API リクエスト関数のインポート
 import { useTranslation } from 'react-i18next';
 
 const Register: React.FC = () => {
@@ -9,59 +8,57 @@ const Register: React.FC = () => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [name, setName] = useState('');
-  const [message, setMessage] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [success, setSuccess] = useState<string | null>(null);
 
-  const handleRegister = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setSuccess(null);
+
     try {
-      const res = await axios.post('/api/auth/register', { email, password, name });
-      setMessage(t('Subscription Success'));
-    } catch (error: any) {
-      setMessage(error.response?.data?.message || t('Subscription Failed'));
+      const response = await register(email, password, name);
+      if (response.message) {
+        setSuccess(response.message);
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message || '登録に失敗しました。');
+      } else {
+        setError('登録に失敗しました。');
+      }
     }
   };
-
   return (
-    <Container maxWidth="sm">
-      <Typography variant="h4" gutterBottom>
-        {t('Register')}
-      </Typography>
-      <form onSubmit={handleRegister}>
-        <TextField
-          label={t('Name')}
-          variant="outlined"
-          fullWidth
-          margin="normal"
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          required
-        />
-        <TextField
-          label={t('Email')}
+    <div>
+      <h1>{t('Register')}</h1>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {success && <p style={{ color: 'green' }}>{success}</p>}
+      <form onSubmit={handleSubmit}>
+        <input
           type="email"
-          variant="outlined"
-          fullWidth
-          margin="normal"
+          placeholder={t('Email')}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
         />
-        <TextField
-          label={t('Password')}
+        <input
           type="password"
-          variant="outlined"
-          fullWidth
-          margin="normal"
+          placeholder={t('Password')}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        <Button type="submit" variant="contained" color="primary" fullWidth>
-          {t('Register')}
-        </Button>
+        <input
+          type="text"
+          placeholder={t('Name')}
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          required
+        />
+        <button type="submit">{t('Register')}</button>
       </form>
-      {message && <Typography variant="body1">{message}</Typography>}
-    </Container>
+    </div>
   );
 };
 

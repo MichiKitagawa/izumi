@@ -1,56 +1,58 @@
-// src/pages/Login.tsx
+// client/src/pages/Login.tsx
 import React, { useState } from 'react';
-import axios from 'axios';
-import { TextField, Button, Container, Typography } from '@mui/material';
+import { login } from '../api'; // API リクエスト関数のインポート
+import { useTranslation } from 'react-i18next';
 
 const Login: React.FC = () => {
+  const { t } = useTranslation();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [message, setMessage] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const [token, setToken] = useState<string | null>(null);
 
-  const handleLogin = async (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setError(null);
+    setToken(null);
+
     try {
-      const res = await axios.post('/api/auth/login', { email, password });
-      localStorage.setItem('token', res.data.token);
-      setMessage('Login successful!');
-    } catch (error: any) {
-      setMessage(error.response?.data?.message || 'Login failed.');
+      const response = await login(email, password);
+      if (response.token) {
+        setToken(response.token);
+        localStorage.setItem('token', response.token);
+        // 必要に応じてリダイレクトなどの処理を追加
+      }
+    } catch (err: unknown) {
+      if (err instanceof Error) {
+        setError(err.message || 'ログインに失敗しました。');
+      } else {
+        setError('ログインに失敗しました。');
+      }
     }
   };
-
   return (
-    <Container maxWidth="sm">
-      <Typography variant="h4" gutterBottom>
-        Login
-      </Typography>
-      <form onSubmit={handleLogin}>
-        <TextField
-          label="Email"
+    <div>
+      <h1>{t('Login')}</h1>
+      {error && <p style={{ color: 'red' }}>{error}</p>}
+      {token && <p style={{ color: 'green' }}>ログインに成功しました。</p>}
+      <form onSubmit={handleSubmit}>
+        <input
           type="email"
-          variant="outlined"
-          fullWidth
-          margin="normal"
+          placeholder={t('Email')}
           value={email}
           onChange={(e) => setEmail(e.target.value)}
           required
         />
-        <TextField
-          label="Password"
+        <input
           type="password"
-          variant="outlined"
-          fullWidth
-          margin="normal"
+          placeholder={t('Password')}
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           required
         />
-        <Button type="submit" variant="contained" color="primary" fullWidth>
-          Login
-        </Button>
+        <button type="submit">{t('Login')}</button>
       </form>
-      {message && <Typography variant="body1">{message}</Typography>}
-    </Container>
+    </div>
   );
 };
 

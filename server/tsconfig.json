@@ -6,8 +6,8 @@
     "outDir": "./dist",
     "baseUrl": "../",
     "paths": {
-      "@shared/*": ["shared/*"],
-      "@server/*": ["server/src/*"]
+      "@shared/*": ["../shared/*"],
+      "@server/*": ["src/*"]
     },
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
