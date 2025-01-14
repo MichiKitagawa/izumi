@@ -1,7 +1,9 @@
-// src/routes/profile.ts
+// server/src/routes/profile.ts
 import { Router, Request, Response } from 'express';
 import { authenticateToken, authorizeRoles } from '../middleware/authenticate';
+import upload from '../middleware/upload';
 import User from '../models/User';
+import { uploadToS3 } from '../utils/s3';
 
 const router = Router();
 
@@ -10,7 +12,7 @@ router.get(
   '/',
   authenticateToken,
   async (req: Request & { user?: any }, res: Response): Promise<void> => {
-    console.log('Request User:', req.user); // 追加
+    console.log('Request User:', req.user);
     try {
       const user = req.user;
       if (!user) {
@@ -18,7 +20,6 @@ router.get(
         return;
       }
 
-      // データベースからユーザー情報を取得
       const userDetails = await User.findByPk(user.id, {
         attributes: ['id', 'email', 'name', 'profileImage', 'role', 'createdAt', 'updatedAt'],
       });
@@ -33,13 +34,15 @@ router.get(
       console.error(error);
       res.status(500).json({ message: 'Server error.' });
     }
-  });
+  }
+);
 
 // ユーザープロファイル更新（認証と特定のロールのみ）
 router.put(
   '/',
   authenticateToken,
-  authorizeRoles('admin', 'editor'), // 例: 'admin' と 'editor' ロールのみ更新可能
+  authorizeRoles('admin', 'editor', 'subscriber'),
+  upload.single('profileImage'), // 追加
   async (req: Request & { user?: any }, res: Response): Promise<void> => {
     try {
       const user = req.user;
@@ -48,11 +51,21 @@ router.put(
         return;
       }
 
-      const { name, profileImage } = req.body;
+      const { name } = req.body;
+      let profileImage: string | undefined = undefined;
 
-      // データベースでユーザーのプロファイルを更新
+      if (req.file) {
+        profileImage = await uploadToS3(req.file);
+      }
+
+      // 更新データを構築
+      const updateData: any = { name };
+      if (profileImage) {
+        updateData.profileImage = profileImage;
+      }
+
       const [updatedRowsCount, updatedRows] = await User.update(
-        { name, profileImage },
+        updateData,
         { where: { id: user.id }, returning: true }
       );
 
@@ -64,8 +77,10 @@ router.put(
       res.json({ message: 'Profile updated.', user: updatedRows[0] });
     } catch (error) {
       console.error(error);
+      console.error('Profile Update Error:', error);
       res.status(500).json({ message: 'Server error.' });
     }
-  });
+  }
+);
 
 export default router;

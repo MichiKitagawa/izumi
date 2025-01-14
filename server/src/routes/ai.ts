@@ -1,33 +1,37 @@
-// server/src/routes/ad.ts
+// server/src/routes/ai.ts
 import { Router, Request, Response } from 'express';
-import { authenticateToken, authorizeRoles } from '../middleware/authenticate';
-import Ad from '../models/Ad';
+import { authenticateToken } from '../middleware/authenticate';
+import AIFactory from '../../../shared/services/aiFactory';
 
 const router = Router();
 
-// 広告の作成（管理者専用）
-router.post('/', authenticateToken, authorizeRoles('admin'), async (req: Request, res: Response) => {
-  const { adType, contentUrl, targetUrl } = req.body;
-
-  // 入力のバリデーション
-  if (!['video', 'banner'].includes(adType)) {
-    res.status(400).json({ message: 'Invalid ad type.' });
-    return;
-  }
+// 音声からテキストへの変換
+router.post('/speech-to-text', authenticateToken, async (req: Request, res: Response) => {
+  const { audioContent } = req.body; // base64エンコードされた音声データ
+  const speechService = AIFactory.getSpeechToTextService();
 
   try {
-    const ad = await Ad.create({
-      adType,
-      contentUrl,
-      targetUrl,
-      active: true,
-    });
-
-    res.status(201).json({ message: 'Ad created successfully.', ad });
+    const transcription = await speechService.transcribe(Buffer.from(audioContent, 'base64'));
+    res.status(200).json({ transcription });
   } catch (error) {
     console.error(error);
-    res.status(500).json({ message: 'Ad creation failed.' });
+    res.status(500).json({ message: 'Speech-to-Text conversion failed.' });
   }
 });
 
-// 他のルートも同様に修正
+// テキストから音声への変換
+router.post('/text-to-speech', authenticateToken, async (req: Request, res: Response) => {
+  const { text, languageCode } = req.body;
+  const ttsService = AIFactory.getTextToSpeechService();
+
+  try {
+    const audioBuffer = await ttsService.synthesize(text);
+    res.set('Content-Type', 'audio/mpeg');
+    res.send(audioBuffer);
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: 'Text-to-Speech conversion failed.' });
+  }
+});
+
+export default router;

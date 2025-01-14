@@ -9,8 +9,10 @@ const JWT_SECRET = process.env.JWT_SECRET || 'your_jwt_secret';
 
 const authenticateToken = (req: Request, res: Response, next: NextFunction): void => {
   const authHeader = req.headers['authorization'];
+  console.log('Authorization Header:', authHeader); // 追加
   const token = authHeader && authHeader.split(' ')[1]; // Bearer <token>
-
+  console.log('Extracted Token:', token); // 追加
+  
   if (!token) {
     res.status(401).json({ message: 'No token provided.' });
     return;

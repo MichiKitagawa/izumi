@@ -1,12 +1,20 @@
-// src/routes/subscription.ts
+// server/src/routes/subscription.ts
 import { Router, Request, Response } from 'express';
 import { authenticateToken } from '../middleware/authenticate';
 import Subscription from '../models/Subscription';
 
 const router = Router();
 
+interface AuthenticatedRequest extends Request {
+  user?: {
+    id: number;
+    email: string;
+    role: string;
+  };
+}
+
 // サブスクリプション登録
-router.post('/subscribe', authenticateToken, async (req: Request & { user?: { id: string } }, res: Response) => {
+router.post('/subscribe', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { plan } = req.body;
   const userId = req.user?.id;
 
@@ -42,8 +50,9 @@ router.post('/subscribe', authenticateToken, async (req: Request & { user?: { id
     res.status(500).json({ message: 'Server error.' });
   }
 });
+
 // サブスクリプションの変更
-router.put('/change', authenticateToken, async (req: Request & { user?: { id: string } }, res: Response) => {
+router.put('/change', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const { plan } = req.body;
   const userId = req.user?.id;
 
@@ -72,8 +81,9 @@ router.put('/change', authenticateToken, async (req: Request & { user?: { id: st
     res.status(500).json({ message: 'Server error.' });
   }
 });
+
 // サブスクリプションの解約
-router.post('/cancel', authenticateToken, async (req: Request & { user?: { id: string } }, res: Response) => {
+router.post('/cancel', authenticateToken, async (req: AuthenticatedRequest, res: Response) => {
   const userId = req.user?.id;
 
   if (!userId) {
@@ -96,4 +106,5 @@ router.post('/cancel', authenticateToken, async (req: Request & { user?: { id: s
     res.status(500).json({ message: 'Server error.' });
   }
 });
+
 export default router;

@@ -18,18 +18,20 @@
   "dependencies": {
     "@aws-sdk/client-s3": "^3.726.1",
     "@google-cloud/speech": "^6.7.0",
+    "@google-cloud/text-to-speech": "^5.8.0",
     "@types/express": "^4.17.15",
     "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "express-validator": "^7.2.1",
+    "helmet": "^8.0.0",
     "jsonwebtoken": "^9.0.2",
-    "module-alias": "^2.2.3",
     "multer": "^1.4.5-lts.1",
     "openai": "^4.78.0",
     "pg": "^8.13.1",
-    "sequelize": "^6.37.5"
+    "sequelize": "^6.37.5",
+    "uuid": "^11.0.5"
   },
   "devDependencies": {
     "@types/bcrypt": "^5.0.2",
@@ -37,6 +39,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/multer": "^1.4.12",
     "@types/pg": "^8.11.10",
+    "@types/uuid": "^10.0.0",
     "nodemon": "^3.1.9",
     "ts-node": "^10.9.2",
     "typescript": "^5.7.2"

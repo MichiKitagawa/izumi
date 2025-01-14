@@ -1,24 +1,36 @@
-// src/routes/download.ts
+// server/src/routes/download.ts 
 import { Router, Request, Response } from 'express';
-import { authenticateToken } from '../middleware/authMiddleware';
+import { authenticateToken } from '../middleware/authenticate';
 import Product from '../models/Product';
 import DownloadHistory from '../models/DownloadHistory';
-import AWS from 'aws-sdk';
+import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
+import { Readable } from 'stream';
 
 const router = Router();
 
+// AuthenticatedRequestインターフェースの定義
+interface AuthenticatedRequest extends Request {
+  user: {
+    id: number;
+    email: string;
+    role: string;
+  };
+}
+
 // AWS S3設定
-const s3 = new AWS.S3({
-  accessKeyId: process.env.AWS_ACCESS_KEY_ID,
-  secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
+const s3 = new S3Client({
   region: process.env.AWS_S3_REGION,
+  credentials: {
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID!,
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY!,
+  },
 });
 
 // ダウンロードエンドポイント
 router.get('/:productId', authenticateToken, async (req: Request, res: Response) => {
   const { productId } = req.params;
-  const userId = req.user.id;
-
+  const userId = (req as AuthenticatedRequest).user.id;
+  
   try {
     const product = await Product.findByPk(productId);
     if (!product) {
@@ -34,21 +46,44 @@ router.get('/:productId', authenticateToken, async (req: Request, res: Response)
       Key: product.fileUrl.split('/').pop()!, // ファイル名を取得
     };
 
-    const fileStream = s3.getObject(params).createReadStream();
+    const command = new GetObjectCommand(params);
+    const response = await s3.send(command);
+
+    if (!response.Body || !(response.Body instanceof Readable)) {
+      throw new Error('Unable to retrieve file stream from S3.');
+    }
+
+    const fileStream = response.Body as Readable;
+
+    // 適切なContent-Typeを設定
+    const mimeTypes: { [key: string]: string } = {
+      pdf: 'application/pdf',
+      mp4: 'video/mp4',
+      mp3: 'audio/mpeg',
+      // 必要に応じて他のファイルタイプを追加
+    };
+
+    const contentType = mimeTypes[product.fileType.toLowerCase()] || 'application/octet-stream';
+
     res.setHeader('Content-Disposition', `attachment; filename="${product.title}.${product.fileType}"`);
-    res.setHeader('Content-Type', product.fileType === 'pdf' ? 'application/pdf' : product.fileType === 'mp4' ? 'video/mp4' : 'audio/mpeg');
+    res.setHeader('Content-Type', contentType);
 
     // ダウンロード履歴の記録
-    const downloadHistory = await DownloadHistory.create({
+    await DownloadHistory.create({
       userId,
       productId: product.id,
       downloadDate: new Date(),
       duration: 0, // 初期値、フロントエンドから利用時間を更新する必要あり
     });
 
-    fileStream.pipe(res);
+    // エラーハンドリング付きでストリームをパイプ
+    fileStream.pipe(res).on('error', (err) => {
+      console.error('Stream error:', err);
+      res.status(500).json({ message: 'Download failed during streaming.' });
+    });
+
   } catch (error) {
-    console.error(error);
+    console.error('Download error:', error);
     res.status(500).json({ message: 'Download failed.' });
   }
 });

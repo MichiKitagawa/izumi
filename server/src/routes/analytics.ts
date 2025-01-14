@@ -1,6 +1,6 @@
 // src/routes/analytics.ts
 import { Router, Request, Response } from 'express';
-import { authenticateToken, authorizeRoles } from '../middleware/authMiddleware';
+import { authenticateToken, authorizeRoles } from '../middleware/authenticate';
 import UserLog from '../models/UserLog';
 import Subscription from '../models/Subscription';
 import Product from '../models/Product';
@@ -12,7 +12,7 @@ const router = Router();
 router.get('/user-logs', authenticateToken, authorizeRoles('admin'), async (req: Request, res: Response) => {
   try {
     const logs = await UserLog.findAll({
-      include: [{ model: UserLog.associations.user, as: 'user', attributes: ['id', 'email', 'name'] }],
+      include: [{ model: UserLog.associations.user.target, as: 'user', attributes: ['id', 'email', 'name'] }],
       order: [['timestamp', 'DESC']],
     });
     res.status(200).json({ logs });
@@ -21,7 +21,6 @@ router.get('/user-logs', authenticateToken, authorizeRoles('admin'), async (req:
     res.status(500).json({ message: 'Failed to fetch user logs.' });
   }
 });
-
 // 収益レポートの取得（管理者専用）
 router.get('/revenue-report', authenticateToken, authorizeRoles('admin'), async (req: Request, res: Response) => {
   try {

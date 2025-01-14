@@ -38,7 +38,7 @@ User.init(
       allowNull: false,
     },
     profileImage: {
-      type: DataTypes.STRING,
+      type: DataTypes.TEXT, // STRINGからTEXTに変更
       allowNull: true,
     },
     role: {

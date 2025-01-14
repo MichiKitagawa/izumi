@@ -1,0 +1,9 @@
+// izumi/tsconfig.json
+{
+    "files": [],
+    "references": [
+      { "path": "./server" },
+      { "path": "./shared" }
+    ]
+  }
+  

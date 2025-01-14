@@ -1,0 +1,21 @@
+// izumi/shared/tsconfig.json
+{
+    "compilerOptions": {
+      "target": "es6",
+      "module": "commonjs",
+      "declaration": true,
+      "outDir": "../shared/dist",
+      "rootDir": "./services",
+      "baseUrl": "./",
+      "paths": {
+        "@shared/*": ["./services/*"]
+      },
+      "esModuleInterop": true,
+      "forceConsistentCasingInFileNames": true,
+      "strict": true,
+      "skipLibCheck": true,
+      "composite": true
+    },
+    "include": ["services/**/*"]
+  }
+  
