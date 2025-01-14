@@ -1,4 +1,4 @@
-// client/src/index.tsx
+// client/src/main.tsx
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
@@ -18,6 +18,11 @@ import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import WelcomePage from './pages/WelcomePage';
 import { AuthProvider } from './context/AuthContext';
+import HeroSection from './components/HeroSection';
+import ContentList from './components/ContentList';
+import AdBanner from './components/AdBanner';
+import MyList from './pages/MyList';
+import Settings from './pages/Settings';
 import './i18n';
 
 const container = document.getElementById('root');
@@ -57,63 +62,33 @@ root.render(
                 <App />
               </ProtectedRoute>
             }
-          />
-          <Route
-            path="/profile"
-            element={
-              <ProtectedRoute>
-                <Profile />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/admin"
-            element={
-              <ProtectedRoute>
-                <Admin />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/upload"
-            element={
-              <ProtectedRoute>
-                <UploadProduct />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/subscription"
-            element={
-              <ProtectedRoute>
-                <Subscription />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/ai"
-            element={
-              <ProtectedRoute>
-                <AIProcessing />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/revenue-report"
-            element={
-              <ProtectedRoute>
-                <RevenueReport />
-              </ProtectedRoute>
-            }
-          />
-          <Route
-            path="/product/:productId"
-            element={
-              <ProtectedRoute>
-                <ProductDetail />
-              </ProtectedRoute>
-            }
-          />
+          >
+            {/* ネストされた子ルート */}
+            <Route
+              index
+              element={
+                <>
+                  <HeroSection />
+                  <ContentList title="あなたにおすすめの商材" />
+                  <ContentList title="最近見た商材" />
+                  <ContentList title="人気の商材" />
+                  <AdBanner />
+                </>
+              }
+            />
+            <Route path="mylist" element={<MyList />} />
+            <Route path="settings" element={<Settings />} />
+            <Route path="profile" element={<Profile />} />
+            <Route path="admin" element={<Admin />} />
+            <Route path="upload" element={<UploadProduct />} />
+            <Route path="subscription" element={<Subscription />} />
+            <Route path="ai" element={<AIProcessing />} />
+            <Route path="revenue-report" element={<RevenueReport />} />
+            <Route path="product/:productId" element={<ProductDetail />} />
+            {/* その他の認証が必要なルート */}
+          </Route>
+
+          {/* 公開ルート */}
           <Route path="/terms" element={<TermsOfService />} />
           <Route path="/privacy" element={<PrivacyPolicy />} />
 
