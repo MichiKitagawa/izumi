@@ -17,12 +17,12 @@ import PrivacyPolicy from './pages/PrivacyPolicy';
 import ProtectedRoute from './components/ProtectedRoute';
 import PublicRoute from './components/PublicRoute';
 import WelcomePage from './pages/WelcomePage';
+import MyList from './pages/MyList'; // 追加
+import Settings from './pages/Settings'; // 追加
 import { AuthProvider } from './context/AuthContext';
 import HeroSection from './components/HeroSection';
 import ContentList from './components/ContentList';
 import AdBanner from './components/AdBanner';
-import MyList from './pages/MyList';
-import Settings from './pages/Settings';
 import './i18n';
 
 const container = document.getElementById('root');

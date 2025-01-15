@@ -5,23 +5,22 @@ import {
   AppBar,
   Toolbar,
   Typography,
-  Button,
   IconButton,
   MenuItem,
   Select,
   FormControl,
   InputLabel,
   Box,
+  TextField,
+  InputAdornment,
   Drawer,
   List,
-  ListItemButton,
-  ListItemText,
+  ListItem,
   Divider,
-  SelectChangeEvent,
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
-import AccountCircle from '@mui/icons-material/AccountCircle';
 import MenuIcon from '@mui/icons-material/Menu';
+import AccountCircle from '@mui/icons-material/AccountCircle';
 import LanguageSwitcher from './LanguageSwitcher';
 import { useTranslation } from 'react-i18next';
 import { useTheme, useMediaQuery } from '@mui/material';
@@ -29,7 +28,7 @@ import AuthContext from '../context/AuthContext';
 
 const Header: React.FC = () => {
   const { t } = useTranslation();
-  const { token, role, setToken, setRole } = useContext(AuthContext);
+  const { token, role, setToken, setRole, setUser, user } = useContext(AuthContext);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -41,7 +40,7 @@ const Header: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
 
   const handleChange = (setter: React.Dispatch<React.SetStateAction<string>>) => (
-    event: SelectChangeEvent<string>
+    event: React.ChangeEvent<{ value: unknown }>
   ) => {
     setter(event.target.value as string);
   };
@@ -53,11 +52,15 @@ const Header: React.FC = () => {
   const handleLogout = () => {
     setToken(null);
     setRole(null);
+    setUser(null); // ユーザー情報をリセット
     localStorage.removeItem('token');
+    localStorage.removeItem('user'); // ユーザー情報をローカルストレージから削除
+    localStorage.removeItem('role'); // ロール情報をローカルストレージから削除
     window.location.href = '/welcome';
   };
 
-  const menuItems = (
+  // ドロップダウンメニューのみをDrawerに表示
+  const drawerContent = (
     <Box
       sx={{ width: 250 }}
       role="presentation"
@@ -65,115 +68,59 @@ const Header: React.FC = () => {
       onKeyDown={toggleDrawer(false)}
     >
       <List>
-        {/* ドロップダウンメニュー項目 */}
-        <ListItemButton>
+        {/* 言語切り替え */}
+        <ListItem>
+          <LanguageSwitcher />
+        </ListItem>
+        <Divider />
+        {/* ドロップダウンメニュー */}
+        <ListItem>
           <FormControl variant="standard" fullWidth>
-            <InputLabel sx={{ color: 'inherit' }}>{t('国')}</InputLabel>
-            <Select
-              value={country}
-              onChange={handleChange(setCountry)}
-              label={t('国')}
-              sx={{ color: 'inherit', borderBottom: '1px solid white' }}
-            >
+            <InputLabel>{t('国')}</InputLabel>
+            <Select value={country} onChange={handleChange(setCountry)} label={t('国')}>
               <MenuItem value="jp">日本</MenuItem>
               <MenuItem value="us">アメリカ</MenuItem>
               <MenuItem value="uk">イギリス</MenuItem>
               {/* 他の国も追加可能 */}
             </Select>
           </FormControl>
-        </ListItemButton>
+        </ListItem>
         <Divider />
-        <ListItemButton>
+        <ListItem>
           <FormControl variant="standard" fullWidth>
-            <InputLabel sx={{ color: 'inherit' }}>{t('タイプ')}</InputLabel>
-            <Select
-              value={type}
-              onChange={handleChange(setType)}
-              label={t('タイプ')}
-              sx={{ color: 'inherit', borderBottom: '1px solid white' }}
-            >
+            <InputLabel>{t('タイプ')}</InputLabel>
+            <Select value={type} onChange={handleChange(setType)} label={t('タイプ')}>
               <MenuItem value="video">動画</MenuItem>
               <MenuItem value="image">画像</MenuItem>
               <MenuItem value="text">テキスト</MenuItem>
               {/* 他のタイプも追加可能 */}
             </Select>
           </FormControl>
-        </ListItemButton>
+        </ListItem>
         <Divider />
-        <ListItemButton>
+        <ListItem>
           <FormControl variant="standard" fullWidth>
-            <InputLabel sx={{ color: 'inherit' }}>{t('料金')}</InputLabel>
-            <Select
-              value={price}
-              onChange={handleChange(setPrice)}
-              label={t('料金')}
-              sx={{ color: 'inherit', borderBottom: '1px solid white' }}
-            >
+            <InputLabel>{t('料金')}</InputLabel>
+            <Select value={price} onChange={handleChange(setPrice)} label={t('料金')}>
               <MenuItem value="free">無料</MenuItem>
               <MenuItem value="paid">有料</MenuItem>
               <MenuItem value="subscription">サブスクリプション</MenuItem>
             </Select>
           </FormControl>
-        </ListItemButton>
+        </ListItem>
         <Divider />
-        <ListItemButton>
+        <ListItem>
           <FormControl variant="standard" fullWidth>
-            <InputLabel sx={{ color: 'inherit' }}>{t('カテゴリー')}</InputLabel>
-            <Select
-              value={category}
-              onChange={handleChange(setCategory)}
-              label={t('カテゴリー')}
-              sx={{ color: 'inherit', borderBottom: '1px solid white' }}
-            >
+            <InputLabel>{t('カテゴリー')}</InputLabel>
+            <Select value={category} onChange={handleChange(setCategory)} label={t('カテゴリー')}>
               <MenuItem value="business">ビジネス</MenuItem>
               <MenuItem value="lifestyle">ライフスタイル</MenuItem>
               <MenuItem value="education">教育</MenuItem>
               {/* 他のカテゴリーも追加可能 */}
             </Select>
           </FormControl>
-        </ListItemButton>
-      </List>
-      <Divider />
-      {/* ユーザー関連リンク */}
-      <List>
-        {token ? (
-          <>
-            <ListItemButton component={Link} to="/profile">
-              <ListItemText primary={t('Profile')} />
-            </ListItemButton>
-            <ListItemButton component={Link} to="/subscription">
-              <ListItemText primary={t('Subscription')} />
-            </ListItemButton>
-            <ListItemButton component={Link} to="/ai">
-              <ListItemText primary={t('AI Processing')} />
-            </ListItemButton>
-            <ListItemButton component={Link} to="/revenue-report">
-              <ListItemText primary={t('Revenue Report')} />
-            </ListItemButton>
-            {role === 'admin' && (
-              <ListItemButton component={Link} to="/admin">
-                <ListItemText primary={t('Admin')} />
-              </ListItemButton>
-            )}
-            {role === 'provider' && (
-              <ListItemButton component={Link} to="/upload">
-                <ListItemText primary={t('Upload Product')} />
-              </ListItemButton>
-            )}
-            <ListItemButton onClick={handleLogout}>
-              <ListItemText primary={t('Logout')} />
-            </ListItemButton>
-          </>
-        ) : (
-          <>
-            <ListItemButton component={Link} to="/register">
-              <ListItemText primary={t('Register')} />
-            </ListItemButton>
-            <ListItemButton component={Link} to="/login">
-              <ListItemText primary={t('Login')} />
-            </ListItemButton>
-          </>
-        )}
+        </ListItem>
+        <Divider />
       </List>
     </Box>
   );
@@ -182,7 +129,14 @@ const Header: React.FC = () => {
     <>
       <AppBar position="static">
         <Toolbar>
-          {/* 左: ロゴ */}
+          {/* 1. プロフィール写真 */}
+          {token && (
+            <IconButton component={Link} to="/profile" color="inherit" sx={{ mr: 2 }}>
+              <AccountCircle />
+            </IconButton>
+          )}
+
+          {/* 2. izumiのロゴ */}
           <Typography
             variant="h6"
             component={Link}
@@ -192,139 +146,47 @@ const Header: React.FC = () => {
             izumi
           </Typography>
 
-          {/* 中央: ドロップダウンメニュー (デスクトップのみ) */}
+          {/* 3. 検索欄（デスクトップ） */}
           {!isMobile && (
-            <Box sx={{ display: 'flex', flexGrow: 1, gap: 2 }}>
-              {/* 国 */}
-              <FormControl variant="standard" sx={{ minWidth: 120, color: 'inherit' }}>
-                <InputLabel sx={{ color: 'inherit' }}>{t('国')}</InputLabel>
-                <Select
-                  value={country}
-                  onChange={handleChange(setCountry)}
-                  label={t('国')}
-                  sx={{ color: 'inherit', borderBottom: '1px solid white' }}
-                >
-                  <MenuItem value="jp">日本</MenuItem>
-                  <MenuItem value="us">アメリカ</MenuItem>
-                  <MenuItem value="uk">イギリス</MenuItem>
-                  {/* 他の国も追加可能 */}
-                </Select>
-              </FormControl>
-
-              {/* タイプ */}
-              <FormControl variant="standard" sx={{ minWidth: 120, color: 'inherit' }}>
-                <InputLabel sx={{ color: 'inherit' }}>{t('タイプ')}</InputLabel>
-                <Select
-                  value={type}
-                  onChange={handleChange(setType)}
-                  label={t('タイプ')}
-                  sx={{ color: 'inherit', borderBottom: '1px solid white' }}
-                >
-                  <MenuItem value="video">動画</MenuItem>
-                  <MenuItem value="image">画像</MenuItem>
-                  <MenuItem value="text">テキスト</MenuItem>
-                  {/* 他のタイプも追加可能 */}
-                </Select>
-              </FormControl>
-
-              {/* 料金 */}
-              <FormControl variant="standard" sx={{ minWidth: 120, color: 'inherit' }}>
-                <InputLabel sx={{ color: 'inherit' }}>{t('料金')}</InputLabel>
-                <Select
-                  value={price}
-                  onChange={handleChange(setPrice)}
-                  label={t('料金')}
-                  sx={{ color: 'inherit', borderBottom: '1px solid white' }}
-                >
-                  <MenuItem value="free">無料</MenuItem>
-                  <MenuItem value="paid">有料</MenuItem>
-                  <MenuItem value="subscription">サブスクリプション</MenuItem>
-                </Select>
-              </FormControl>
-
-              {/* カテゴリー */}
-              <FormControl variant="standard" sx={{ minWidth: 150, color: 'inherit' }}>
-                <InputLabel sx={{ color: 'inherit' }}>{t('カテゴリー')}</InputLabel>
-                <Select
-                  value={category}
-                  onChange={handleChange(setCategory)}
-                  label={t('カテゴリー')}
-                  sx={{ color: 'inherit', borderBottom: '1px solid white' }}
-                >
-                  <MenuItem value="business">ビジネス</MenuItem>
-                  <MenuItem value="lifestyle">ライフスタイル</MenuItem>
-                  <MenuItem value="education">教育</MenuItem>
-                  {/* 他のカテゴリーも追加可能 */}
-                </Select>
-              </FormControl>
+            <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', maxWidth: 400 }}>
+              <TextField
+                variant="outlined"
+                placeholder={t('Search')}
+                size="small"
+                fullWidth
+                InputProps={{
+                  endAdornment: (
+                    <InputAdornment position="end">
+                      <IconButton edge="end" color="inherit">
+                        <SearchIcon />
+                      </IconButton>
+                    </InputAdornment>
+                  ),
+                }}
+              />
             </Box>
           )}
 
-          {/* 右: 検索アイコン、言語スイッチャー、ユーザーアイコン (デスクトップのみ) */}
-          {!isMobile && (
-            <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-              <IconButton color="inherit">
-                <SearchIcon />
-              </IconButton>
-              <LanguageSwitcher />
-              {token && (
-                <IconButton color="inherit" component={Link} to="/profile">
-                  <AccountCircle />
-                </IconButton>
-              )}
-              {!token && (
-                <>
-                  <Button color="inherit" component={Link} to="/register">
-                    {t('Register')}
-                  </Button>
-                  <Button color="inherit" component={Link} to="/login">
-                    {t('Login')}
-                  </Button>
-                </>
-              )}
-              {token && (
-                <>
-                  <Button color="inherit" component={Link} to="/subscription">
-                    {t('Subscription')}
-                  </Button>
-                  <Button color="inherit" component={Link} to="/ai">
-                    {t('AI Processing')}
-                  </Button>
-                  <Button color="inherit" component={Link} to="/revenue-report">
-                    {t('Revenue Report')}
-                  </Button>
-                  {role === 'admin' && (
-                    <Button color="inherit" component={Link} to="/admin">
-                      {t('Admin')}
-                    </Button>
-                  )}
-                  {role === 'provider' && (
-                    <Button color="inherit" component={Link} to="/upload">
-                      {t('Upload Product')}
-                    </Button>
-                  )}
-                  <Button color="inherit" onClick={handleLogout}>
-                    {t('Logout')}
-                  </Button>
-                </>
-              )}
-            </Box>
-          )}
-
-          {/* ハンバーガーメニュー (モバイルのみ) */}
+          {/* 4. 検索アイコン（モバイル） */}
           {isMobile && (
-            <IconButton color="inherit" onClick={toggleDrawer(true)}>
-              <MenuIcon />
+            <IconButton color="inherit" sx={{ flexGrow: 1 }}>
+              <SearchIcon />
             </IconButton>
           )}
+
+          {/* 5. ハンバーガーメニュー */}
+          <IconButton color="inherit" onClick={toggleDrawer(true)}>
+            <MenuIcon />
+          </IconButton>
         </Toolbar>
       </AppBar>
 
-      {/* Drawer for mobile navigation */}
-      <Drawer anchor="left" open={drawerOpen} onClose={toggleDrawer(false)}>
-        {menuItems}
+      {/* Drawer for navigation */}
+      <Drawer anchor="right" open={drawerOpen} onClose={toggleDrawer(false)}>
+        {drawerContent}
       </Drawer>
     </>
   );
 };
+
 export default Header;
