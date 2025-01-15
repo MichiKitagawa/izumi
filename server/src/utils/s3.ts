@@ -13,19 +13,42 @@ const s3 = new S3Client({
   },
 });
 
+/**
+ * S3にファイルをアップロードし、公開URLを返す関数
+ * @param file アップロードするファイル
+ * @returns 公開URLの文字列
+ */
 export const uploadToS3 = async (file: Express.Multer.File): Promise<string> => {
-  console.log('Uploading file:', file.originalname);
-  const fileExtension = file.originalname.split('.').pop();
-  const key = `profile-images/${uuidv4()}.${fileExtension}`;
+  try {
+    console.log('Uploading file:', file.originalname);
 
-  const params = new PutObjectCommand({
-    Bucket: process.env.AWS_S3_BUCKET_NAME!,
-    Key: key,
-    Body: file.buffer,
-    ContentType: file.mimetype,
-  });
+    // ファイル拡張子を取得
+    const fileExtension = file.originalname.split('.').pop();
+    if (!fileExtension) {
+      throw new Error('Invalid file name.');
+    }
 
-  await s3.send(params);
+    // 一意のキーを生成
+    const key = `profile-images/${uuidv4()}.${fileExtension}`;
 
-  return `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_S3_REGION}.amazonaws.com/${key}`;
+    // PutObjectCommandのパラメータを設定
+    const params = new PutObjectCommand({
+      Bucket: process.env.AWS_S3_BUCKET_NAME!,
+      Key: key,
+      Body: file.buffer,
+      ContentType: file.mimetype,
+      // ACLを削除
+    });
+
+    // S3にオブジェクトをアップロード
+    await s3.send(params);
+    console.log('File uploaded successfully:', key);
+
+    // 公開URLを生成
+    const publicUrl = `https://${process.env.AWS_S3_BUCKET_NAME}.s3.${process.env.AWS_S3_REGION}.amazonaws.com/${key}`;
+    return publicUrl;
+  } catch (error) {
+    console.error('Error uploading to S3:', error);
+    throw new Error('Failed to upload image.');
+  }
 };

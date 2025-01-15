@@ -17,6 +17,7 @@ import {
   List,
   ListItem,
   Divider,
+  SelectChangeEvent, // SelectChangeEvent をインポート
 } from '@mui/material';
 import SearchIcon from '@mui/icons-material/Search';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -28,7 +29,7 @@ import AuthContext from '../context/AuthContext';
 
 const Header: React.FC = () => {
   const { t } = useTranslation();
-  const { token, role, setToken, setRole, setUser, user } = useContext(AuthContext);
+  const { token } = useContext(AuthContext);
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
 
@@ -40,7 +41,7 @@ const Header: React.FC = () => {
   const [drawerOpen, setDrawerOpen] = React.useState(false);
 
   const handleChange = (setter: React.Dispatch<React.SetStateAction<string>>) => (
-    event: React.ChangeEvent<{ value: unknown }>
+    event: SelectChangeEvent<string>
   ) => {
     setter(event.target.value as string);
   };
@@ -49,17 +50,6 @@ const Header: React.FC = () => {
     setDrawerOpen(open);
   };
 
-  const handleLogout = () => {
-    setToken(null);
-    setRole(null);
-    setUser(null); // ユーザー情報をリセット
-    localStorage.removeItem('token');
-    localStorage.removeItem('user'); // ユーザー情報をローカルストレージから削除
-    localStorage.removeItem('role'); // ロール情報をローカルストレージから削除
-    window.location.href = '/welcome';
-  };
-
-  // ドロップダウンメニューのみをDrawerに表示
   const drawerContent = (
     <Box
       sx={{ width: 250 }}
@@ -68,12 +58,10 @@ const Header: React.FC = () => {
       onKeyDown={toggleDrawer(false)}
     >
       <List>
-        {/* 言語切り替え */}
         <ListItem>
           <LanguageSwitcher />
         </ListItem>
         <Divider />
-        {/* ドロップダウンメニュー */}
         <ListItem>
           <FormControl variant="standard" fullWidth>
             <InputLabel>{t('国')}</InputLabel>
@@ -81,7 +69,6 @@ const Header: React.FC = () => {
               <MenuItem value="jp">日本</MenuItem>
               <MenuItem value="us">アメリカ</MenuItem>
               <MenuItem value="uk">イギリス</MenuItem>
-              {/* 他の国も追加可能 */}
             </Select>
           </FormControl>
         </ListItem>
@@ -93,7 +80,6 @@ const Header: React.FC = () => {
               <MenuItem value="video">動画</MenuItem>
               <MenuItem value="image">画像</MenuItem>
               <MenuItem value="text">テキスト</MenuItem>
-              {/* 他のタイプも追加可能 */}
             </Select>
           </FormControl>
         </ListItem>
@@ -116,7 +102,6 @@ const Header: React.FC = () => {
               <MenuItem value="business">ビジネス</MenuItem>
               <MenuItem value="lifestyle">ライフスタイル</MenuItem>
               <MenuItem value="education">教育</MenuItem>
-              {/* 他のカテゴリーも追加可能 */}
             </Select>
           </FormControl>
         </ListItem>
@@ -129,14 +114,12 @@ const Header: React.FC = () => {
     <>
       <AppBar position="static">
         <Toolbar>
-          {/* 1. プロフィール写真 */}
           {token && (
             <IconButton component={Link} to="/profile" color="inherit" sx={{ mr: 2 }}>
               <AccountCircle />
             </IconButton>
           )}
 
-          {/* 2. izumiのロゴ */}
           <Typography
             variant="h6"
             component={Link}
@@ -146,7 +129,6 @@ const Header: React.FC = () => {
             izumi
           </Typography>
 
-          {/* 3. 検索欄（デスクトップ） */}
           {!isMobile && (
             <Box sx={{ flexGrow: 1, display: 'flex', alignItems: 'center', maxWidth: 400 }}>
               <TextField
@@ -167,26 +149,21 @@ const Header: React.FC = () => {
             </Box>
           )}
 
-          {/* 4. 検索アイコン（モバイル） */}
           {isMobile && (
             <IconButton color="inherit" sx={{ flexGrow: 1 }}>
               <SearchIcon />
             </IconButton>
           )}
 
-          {/* 5. ハンバーガーメニュー */}
           <IconButton color="inherit" onClick={toggleDrawer(true)}>
             <MenuIcon />
           </IconButton>
         </Toolbar>
       </AppBar>
 
-      {/* Drawer for navigation */}
       <Drawer anchor="right" open={drawerOpen} onClose={toggleDrawer(false)}>
         {drawerContent}
       </Drawer>
     </>
   );
-};
-
-export default Header;
+};export default Header;

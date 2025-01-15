@@ -10,10 +10,10 @@ const router = Router();
 // AWS S3設定
 const s3 = new S3Client({
   credentials: {
-    accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'YOUR_AWS_ACCESS_KEY_ID',
-    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'YOUR_AWS_SECRET_ACCESS_KEY',
+    accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'AWS_ACCESS_KEY_ID',
+    secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'AWS_SECRET_ACCESS_KEY',
   },
-  region: process.env.AWS_REGION || 'YOUR_AWS_REGION',
+  region: process.env.AWS_S3_REGION || 'AWS_REGION',
 });
 
 // multer設定
@@ -22,11 +22,22 @@ const upload = multer({
   storage,
   limits: { fileSize: 100 * 1024 * 1024 }, // 100MB
   fileFilter: (req, file, cb) => {
-    const allowedTypes = ['application/pdf', 'video/mp4', 'audio/mpeg'];
-    if (allowedTypes.includes(file.mimetype)) {
-      cb(null, true);
+    if (file.fieldname === 'file') {
+      const allowedTypes = ['application/pdf', 'video/mp4', 'audio/mpeg'];
+      if (allowedTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type for main file.'));
+      }
+    } else if (file.fieldname === 'thumbnail') {
+      const allowedImageTypes = ['image/jpeg', 'image/png', 'image/gif'];
+      if (allowedImageTypes.includes(file.mimetype)) {
+        cb(null, true);
+      } else {
+        cb(new Error('Invalid file type for thumbnail.'));
+      }
     } else {
-      cb(new Error('Invalid file type.'));
+      cb(new Error('Unknown field.'));
     }
   },
 });
@@ -35,14 +46,22 @@ const upload = multer({
 router.post(
   '/upload',
   authenticateToken,
-  authorizeRoles('provider'),
-  upload.single('file'),
-  async (req: Request & { user?: { id: number } }, res: Response): Promise<void> => { // id を number に変更
+  authorizeRoles('provider', 'editor', 'subscriber'),
+  upload.fields([{ name: 'file', maxCount: 1 }, { name: 'thumbnail', maxCount: 1 }]), // 複数ファイル対応
+  async (req: Request, res: Response): Promise<void> => {
+    console.log('Received upload request'); // デバッグログ
     const { title, description, category } = req.body;
-    const file = req.file;
+    const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
+    const file = files && files['file'] ? files['file'][0] : null;
+    const thumbnail = files && files['thumbnail'] ? files['thumbnail'][0] : null;
 
     if (!file) {
-      res.status(400).json({ message: 'No file uploaded.' });
+      res.status(400).json({ message: 'No main file uploaded.' });
+      return;
+    }
+
+    if (!thumbnail) {
+      res.status(400).json({ message: 'No thumbnail uploaded.' });
       return;
     }
 
@@ -51,20 +70,28 @@ router.post(
       return;
     }
 
-    // S3にファイルをアップロード
-    const params = {
-      Bucket: process.env.S3_BUCKET_NAME || 'YOUR_S3_BUCKET_NAME',
-      Key: `${Date.now()}_${file.originalname}`,
-      Body: file.buffer,
-      ContentType: file.mimetype,
-    };
-
     try {
-      const command = new PutObjectCommand(params);
-      await s3.send(command);
+      // メインファイルのアップロード
+      const fileParams = {
+        Bucket: process.env.AWS_S3_BUCKET_NAME || 'S3_BUCKET_NAME',
+        Key: `${Date.now()}_${file.originalname}`,
+        Body: file.buffer,
+        ContentType: file.mimetype,
+      };
+      const fileCommand = new PutObjectCommand(fileParams);
+      await s3.send(fileCommand);
+      const fileUrl = `https://${fileParams.Bucket}.s3.${s3.config.region}.amazonaws.com/${fileParams.Key}`;
 
-      // S3のファイルURLを生成
-      const fileUrl = `http://${params.Bucket}.s3.${s3.config.region}.amazonaws.com/${params.Key}`;
+      // サムネイルのアップロード
+      const thumbnailParams = {
+        Bucket: process.env.AWS_S3_BUCKET_NAME || 'S3_BUCKET_NAME',
+        Key: `thumbnails/${Date.now()}_${thumbnail.originalname}`,
+        Body: thumbnail.buffer,
+        ContentType: thumbnail.mimetype,
+      };
+      const thumbnailCommand = new PutObjectCommand(thumbnailParams);
+      await s3.send(thumbnailCommand);
+      const thumbnailUrl = `https://${thumbnailParams.Bucket}.s3.${s3.config.region}.amazonaws.com/${thumbnailParams.Key}`;
 
       // 商材情報のデータベース保存
       const product = await Product.create({
@@ -72,9 +99,10 @@ router.post(
         description,
         category,
         fileUrl: fileUrl,
+        thumbnailUrl: thumbnailUrl, // サムネイルURLを保存
         fileType: file.mimetype.split('/')[1],
         fileSize: file.size,
-        providerId: req.user.id, // number 型として扱う
+        providerId: req.user.id,
       });
 
       res.status(201).json({ message: 'Product uploaded successfully.', product });
@@ -82,14 +110,13 @@ router.post(
       console.error(error);
       res.status(500).json({ message: 'File upload failed.' });
     }
-  }
-);
+  });
 
 // 商材一覧取得API
 router.get('/list', async (req: Request, res: Response) => {
   try {
     const products = await Product.findAll({
-      attributes: ['id', 'title', 'description', 'category', 'fileUrl', 'fileType', 'fileSize', 'providerId', 'createdAt'],
+      attributes: ['id', 'title', 'description', 'category', 'fileUrl', 'thumbnailUrl', 'fileType', 'fileSize', 'providerId', 'createdAt'],
     });
     res.status(200).json({ products });
   } catch (error) {
@@ -103,7 +130,7 @@ router.get('/:id', async (req: Request, res: Response) => {
   const { id } = req.params;
   try {
     const product = await Product.findByPk(id, {
-      attributes: ['id', 'title', 'description', 'category', 'fileUrl', 'fileType', 'fileSize', 'providerId', 'createdAt'],
+      attributes: ['id', 'title', 'description', 'category', 'fileUrl', 'thumbnailUrl', 'fileType', 'fileSize', 'providerId', 'createdAt'],
     });
     if (!product) {
       return res.status(404).json({ message: '商材が見つかりませんでした。' });

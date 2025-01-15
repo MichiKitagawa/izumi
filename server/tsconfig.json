@@ -6,6 +6,7 @@
     "outDir": "./dist",
     "rootDir": "./src",
     "baseUrl": "./src",
+    "typeRoots": ["./src/@types", "./node_modules/@types"],
     "paths": {
       "@shared/*": ["../../shared/services/*"],
       "@server/*": ["./*"]

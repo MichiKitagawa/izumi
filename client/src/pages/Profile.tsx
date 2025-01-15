@@ -52,6 +52,7 @@ const Profile: React.FC = () => {
       if (res.data.user) {
         // AuthContextのuser情報を更新
         setUser({
+          ...user, // 既存のユーザーデータを展開
           name: res.data.user.name,
           profileImage: res.data.user.profileImage || user?.profileImage || '', // photoUrl から profileImage に変更
         });
@@ -99,9 +100,9 @@ const Profile: React.FC = () => {
             </label>
             {previewImage && (
               <Avatar
-                src={previewImage}
-                alt="Profile Preview"
-                sx={{ width: 100, height: 100, mt: 2 }}
+                alt={user?.name || 'User'}
+                src={previewImage ? `${previewImage}?${new Date().getTime()}` : '/default-avatar.png'}
+                sx={{ width: 100, height: 100, mb: 2 }}
               />
             )}
             <Button type="submit" variant="contained" color="primary" fullWidth>

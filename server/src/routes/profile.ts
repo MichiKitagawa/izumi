@@ -42,7 +42,7 @@ router.put(
   '/',
   authenticateToken,
   authorizeRoles('admin', 'editor', 'subscriber'),
-  upload.single('profileImage'), // 追加
+  upload.single('profileImage'),
   async (req: Request & { user?: any }, res: Response): Promise<void> => {
     try {
       const user = req.user;
@@ -58,7 +58,6 @@ router.put(
         profileImage = await uploadToS3(req.file);
       }
 
-      // 更新データを構築
       const updateData: any = { name };
       if (profileImage) {
         updateData.profileImage = profileImage;
@@ -74,10 +73,10 @@ router.put(
         return;
       }
 
-      res.json({ message: 'Profile updated.', user: updatedRows[0] });
+      const updatedUser = updatedRows[0].get({ plain: true }); // plain オブジェクトに変換
+      res.json({ message: 'Profile updated.', user: updatedUser });
     } catch (error) {
       console.error(error);
-      console.error('Profile Update Error:', error);
       res.status(500).json({ message: 'Server error.' });
     }
   }
