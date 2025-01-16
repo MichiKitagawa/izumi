@@ -125,6 +125,23 @@ router.get('/list', async (req: Request, res: Response) => {
   }
 });
 
+// フィーチャー商材取得API
+router.get('/featured', async (req: Request, res: Response) => {
+  try {
+    const product = await Product.findOne({
+      order: [['createdAt', 'DESC']],
+      attributes: ['id', 'title', 'description', 'thumbnailUrl'],
+    });    
+    if (!product) {
+      return res.status(404).json({ message: 'フィーチャー商材が見つかりませんでした。' });
+    }
+    res.status(200).json({ product });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ message: '商材詳細の取得に失敗しました。' });
+  }
+});
+
 // 商材詳細取得API
 router.get('/:id', async (req: Request, res: Response) => {
   const { id } = req.params;

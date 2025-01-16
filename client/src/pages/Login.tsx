@@ -2,9 +2,8 @@
 import React, { useContext, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { TextField, Button, Container, Typography, Box } from '@mui/material';
-import axios from 'axios';
+import { login } from '../api';
 import AuthContext from '../context/AuthContext';
-import { API_BASE_URL } from '../api';
 import { useTranslation } from 'react-i18next';
 
 const Login: React.FC = () => {
@@ -18,26 +17,24 @@ const Login: React.FC = () => {
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     try {
-      // 修正: エンドポイントを確認し、必要に応じて変更
-      const res = await axios.post(`${API_BASE_URL}/auth/login`, { email, password });
-      if (res.data.token) {
-        setToken(res.data.token);
+      const res = await login(email, password);
+      if (res.token) {
+        setToken(res.token);
         setUser({
-          name: res.data.user.name,
-          profileImage: res.data.user.profileImage || '/default-avatar.png',
+          name: res.user.name,
+          profileImage: res.user.profileImage || '/default-avatar.png',
         });
-        setRole(res.data.user.role);
+        setRole(res.user.role);
         navigate('/');
       }
     } catch (error: unknown) {
-      if (axios.isAxiosError(error) && error.response) {
-        setMessage(error.response.data.message || t('Login failed.'));
+      if (error instanceof Error) {
+        setMessage(error.message || t('Login failed.'));
       } else {
         setMessage(t('Login failed.'));
       }
     }
   };
-
   return (
     <Container maxWidth="sm">
       <Box display="flex" flexDirection="column" alignItems="center" minHeight="80vh">

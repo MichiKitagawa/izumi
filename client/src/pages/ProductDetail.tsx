@@ -5,8 +5,13 @@ import { useParams } from 'react-router-dom';
 import { Container, Typography, Button } from '@mui/material';
 
 const ProductDetail: React.FC = () => {
-  const { productId } = useParams();
-  const [product, setProduct] = useState<any>(null);
+  const { productId } = useParams<{ productId: string }>();
+  const [product, setProduct] = useState<{
+    title: string;
+    description: string;
+    category: string;
+    fileType: string;
+  } | null>(null);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
@@ -14,8 +19,12 @@ const ProductDetail: React.FC = () => {
       try {
         const res = await axios.get(`/api/product/${productId}`);
         setProduct(res.data.product);
-      } catch (error: any) {
-        setMessage(error.response?.data?.message || 'Failed to fetch product.');
+      } catch (error) {
+        if (axios.isAxiosError(error)) {
+          setMessage(error.response?.data?.message || 'Failed to fetch product.');
+        } else {
+          setMessage('Failed to fetch product.');
+        }
       }
     };
 
@@ -34,13 +43,19 @@ const ProductDetail: React.FC = () => {
       const url = window.URL.createObjectURL(new Blob([res.data]));
       const link = document.createElement('a');
       link.href = url;
-      link.setAttribute('download', `${product.title}.${product.fileType}`);
+      if (product) {
+        link.setAttribute('download', `${product.title}.${product.fileType}`);
+      }
       document.body.appendChild(link);
       link.click();
       link.parentNode?.removeChild(link);
       setMessage('Download started.');
-    } catch (error: any) {
-      setMessage(error.response?.data?.message || 'Download failed.');
+    } catch (error) {
+      if (axios.isAxiosError(error)) {
+        setMessage(error.response?.data?.message || 'Download failed.');
+      } else {
+        setMessage('Download failed.');
+      }
     }
   };
 

@@ -10,7 +10,7 @@ const ProductList: React.FC = () => {
     title: string;
     description: string;
     fileType: string;
-    fileUrl: string;
+    thumbnailUrl: string;
   }
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -43,11 +43,11 @@ const ProductList: React.FC = () => {
         {products.map((product) => (
           <Grid item key={product.id} xs={12} sm={6} md={4}>
             <Card>
-              {product.fileType === 'image' && (
+              {product.thumbnailUrl && (
                 <CardMedia
                   component="img"
                   height="140"
-                  image={product.fileUrl}
+                  image={product.thumbnailUrl}
                   alt={product.title}
                 />
               )}
@@ -56,7 +56,9 @@ const ProductList: React.FC = () => {
                   {product.title}
                 </Typography>
                 <Typography variant="body2" color="text.secondary">
-                  {product.description.substring(0, 100)}...
+                  {product.description.length > 100
+                    ? `${product.description.substring(0, 100)}...`
+                    : product.description}
                 </Typography>
                 <Button
                   component={Link}
