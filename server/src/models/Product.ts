@@ -9,6 +9,7 @@ class Product extends Model {
   public description!: string;
   public category!: string;
   public fileUrl!: string;
+  public thumbnailUrl!: string
   public fileType!: string; // PDF, MP4, MP3
   public fileSize!: number; // in bytes
   public providerId!: number;
@@ -38,6 +39,10 @@ Product.init(
     fileUrl: {
       type: DataTypes.STRING,
       allowNull: false,
+    },
+    thumbnailUrl: { 
+      type: DataTypes.STRING,
+      allowNull: true, 
     },
     fileType: {
       type: DataTypes.STRING,

@@ -4,7 +4,7 @@ import { authenticateToken } from '../middleware/authenticate';
 import Product from '../models/Product';
 import DownloadHistory from '../models/DownloadHistory';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
-import { Readable } from 'stream';
+import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 
 const router = Router();
 
@@ -26,65 +26,57 @@ const s3 = new S3Client({
   },
 });
 
-// ダウンロードエンドポイント
-router.get('/:productId', authenticateToken, async (req: Request, res: Response) => {
+// ユーザーのアクセス権を確認する関数の例
+async function checkUserAccess(userId: number, productId: string): Promise<boolean> {
+  // ここにユーザーがコンテンツにアクセスできるかどうかを確認するロジックを実装
+  // 例: ユーザーが購入済みか、許可された役割を持っているかなど
+  // 現在は仮実装として常にtrueを返す
+  return true;
+}
+
+// プリサインドURL生成エンドポイント
+router.get('/presigned-url/:productId', authenticateToken, async (req: Request, res: Response) => {
   const { productId } = req.params;
   const userId = (req as AuthenticatedRequest).user.id;
-  
+
   try {
     const product = await Product.findByPk(productId);
     if (!product) {
       return res.status(404).json({ message: 'Product not found.' });
     }
 
-    // ダウンロード制限の確認（例: 同時ダウンロード数、期限など）
-    // ここでは簡略化のためスキップ
-
-    // S3からファイルを取得
-    const params = {
-      Bucket: process.env.AWS_S3_BUCKET_NAME!,
-      Key: product.fileUrl.split('/').pop()!, // ファイル名を取得
-    };
-
-    const command = new GetObjectCommand(params);
-    const response = await s3.send(command);
-
-    if (!response.Body || !(response.Body instanceof Readable)) {
-      throw new Error('Unable to retrieve file stream from S3.');
+    // ユーザーがこのコンテンツにアクセス権を持っているか確認
+    const isAuthorized = await checkUserAccess(userId, productId);
+    if (!isAuthorized) {
+      return res.status(403).json({ message: 'Access denied.' });
     }
 
-    const fileStream = response.Body as Readable;
+    // S3オブジェクトキーを抽出
+    const objectKey = product.fileUrl.split('.com/')[1];
+    if (!objectKey) {
+      return res.status(400).json({ message: 'Invalid file URL.' });
+    }
 
-    // 適切なContent-Typeを設定
-    const mimeTypes: { [key: string]: string } = {
-      pdf: 'application/pdf',
-      mp4: 'video/mp4',
-      mp3: 'audio/mpeg',
-      // 必要に応じて他のファイルタイプを追加
-    };
+    const command = new GetObjectCommand({
+      Bucket: process.env.AWS_S3_BUCKET_NAME!,
+      Key: objectKey,
+    });
 
-    const contentType = mimeTypes[product.fileType.toLowerCase()] || 'application/octet-stream';
-
-    res.setHeader('Content-Disposition', `attachment; filename="${product.title}.${product.fileType}"`);
-    res.setHeader('Content-Type', contentType);
+    // プリサインドURLの生成（有効期限は10分）
+    const presignedUrl = await getSignedUrl(s3, command, { expiresIn: 600 }); // 600秒 = 10分
 
     // ダウンロード履歴の記録
     await DownloadHistory.create({
       userId,
       productId: product.id,
       downloadDate: new Date(),
-      duration: 0, // 初期値、フロントエンドから利用時間を更新する必要あり
+      duration: 0, // 必要に応じて更新
     });
 
-    // エラーハンドリング付きでストリームをパイプ
-    fileStream.pipe(res).on('error', (err) => {
-      console.error('Stream error:', err);
-      res.status(500).json({ message: 'Download failed during streaming.' });
-    });
-
+    res.json({ url: presignedUrl });
   } catch (error) {
-    console.error('Download error:', error);
-    res.status(500).json({ message: 'Download failed.' });
+    console.error('Error generating presigned URL:', error);
+    res.status(500).json({ message: 'Failed to generate presigned URL.' });
   }
 });
 
