@@ -31,6 +31,7 @@
     "mime-types": "^2.1.35",
     "multer": "^1.4.5-lts.1",
     "openai": "^4.78.0",
+    "pdf-parse": "^1.1.1",
     "pg": "^8.13.1",
     "sequelize": "^6.37.5",
     "uuid": "^11.0.5"
@@ -41,6 +42,7 @@
     "@types/jsonwebtoken": "^9.0.7",
     "@types/mime-types": "^2.1.4",
     "@types/multer": "^1.4.12",
+    "@types/pdf-parse": "^1.1.4",
     "@types/pg": "^8.11.10",
     "@types/uuid": "^10.0.0",
     "nodemon": "^3.1.9",

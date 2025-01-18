@@ -1,4 +1,3 @@
-// client/src/components/ContentList.tsx
 import React, { useEffect, useState } from 'react';
 import { Box, Typography, Card, CardMedia, CardContent, CardActions, Button } from '@mui/material';
 import { useTranslation } from 'react-i18next';
@@ -14,21 +13,22 @@ interface Product {
   id: string;
   title: string;
   description: string;
-  thumbnailUrl: string;
+  thumbnailUrl: string; // サムネイルURL (プリサインドURL)
 }
 
 const ContentList: React.FC<ContentListProps> = ({ title }) => {
   const { t } = useTranslation();
   const theme = useTheme();
   const isMobile = useMediaQuery(theme.breakpoints.down('md'));
-  const [products, setProducts] = useState<Product[]>([]);
-  const [message, setMessage] = useState('');
+  const [products, setProducts] = useState<Product[]>([]); // 商品リスト
+  const [message, setMessage] = useState(''); // エラーメッセージ
 
+  // 商品リストを取得
   useEffect(() => {
     const fetchProducts = async () => {
       try {
-        const data = await apiRequest('/product/list');
-        setProducts(data.products);
+        const data = await apiRequest('/product/list'); // 商材一覧APIからデータを取得
+        setProducts(data.products); // 商材リストをステートに設定
       } catch (error: unknown) {
         setMessage(error instanceof Error ? error.message : '商材の取得に失敗しました。');
       }
@@ -41,7 +41,9 @@ const ContentList: React.FC<ContentListProps> = ({ title }) => {
       <Typography variant={isMobile ? 'h5' : 'h4'} gutterBottom>
         {title}
       </Typography>
+      {/* エラーメッセージを表示 */}
       {message && <Typography variant="body1" color="error">{message}</Typography>}
+      {/* 商品リストを表示 */}
       <Box
         sx={{
           display: 'flex',
@@ -67,10 +69,11 @@ const ContentList: React.FC<ContentListProps> = ({ title }) => {
               },
             }}
           >
+            {/* サムネイルを表示 */}
             <CardMedia
               component="img"
               height={isMobile ? '100' : '140'}
-              image={product.thumbnailUrl}
+              image={product.thumbnailUrl} // サムネイルURL (プリサインドURL)
               alt={product.title}
             />
             <CardContent>

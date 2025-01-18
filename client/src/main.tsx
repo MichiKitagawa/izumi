@@ -24,6 +24,7 @@ import HeroSection from './components/HeroSection';
 import ContentList from './components/ContentList';
 import AdBanner from './components/AdBanner';
 import './i18n';
+import UserProducts from './pages/UserProducts';
 
 const container = document.getElementById('root');
 const root = createRoot(container!);
@@ -76,6 +77,7 @@ root.render(
                 </>
               }
             />
+            <Route path="/user-products" element={<UserProducts />} />
             <Route path="mylist" element={<MyList />} />
             <Route path="settings" element={<Settings />} />
             <Route path="profile" element={<Profile />} />

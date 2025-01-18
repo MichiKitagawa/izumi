@@ -10,6 +10,7 @@ class Product extends Model {
   public category!: string;
   public fileUrl!: string;
   public thumbnailUrl!: string
+  public htmlContent!: string | null;
   public fileType!: string; // PDF, MP4, MP3
   public fileSize!: number; // in bytes
   public providerId!: number;
@@ -43,6 +44,10 @@ Product.init(
     thumbnailUrl: { 
       type: DataTypes.STRING,
       allowNull: true, 
+    },
+    htmlContent: { // 新しいフィールドを追加
+      type: DataTypes.TEXT,
+      allowNull: true,
     },
     fileType: {
       type: DataTypes.STRING,

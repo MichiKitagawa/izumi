@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect } from 'react'; 
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
 import { Container, Typography, Button } from '@mui/material';
@@ -9,20 +9,23 @@ interface Product {
   title: string;
   description: string;
   category: string;
-  fileType: string;
-  fileUrl: string; // プリサインドURLが入る
   thumbnailUrl: string;
+  htmlContent: string; // HTMLデータを含むフィールド
 }
 
 const ProductDetail: React.FC = () => {
   const { productId } = useParams<{ productId: string }>();
   const [product, setProduct] = useState<Product | null>(null);
+  const [translatedTitle, setTranslatedTitle] = useState<string>('');
+  const [translatedDescription, setTranslatedDescription] = useState<string>('');
+  const [translatedHtmlContent, setTranslatedHtmlContent] = useState<string>('');
+  const [loading, setLoading] = useState<boolean>(false);
   const [message, setMessage] = useState('');
 
   useEffect(() => {
     const fetchProduct = async () => {
       try {
-        // 商品詳細取得APIからデータを取得（fileUrlはプリサインドURL）
+        // 商材詳細取得APIからデータを取得
         const res = await axios.get(`${API_BASE_URL}/product/${productId}`);
         setProduct(res.data.product);
       } catch (error: unknown) {
@@ -33,27 +36,22 @@ const ProductDetail: React.FC = () => {
     fetchProduct();
   }, [productId]);
 
-  const handleDownload = async () => {
-    const token = localStorage.getItem('token');
+  const handleTranslate = async (languageCode: string) => {
+    if (!product) return;
+    setLoading(true);
+    setMessage('');
     try {
-      // ダウンロード用プリサインドURLを取得
-      const res = await axios.get(`${API_BASE_URL}/download/presigned-url/${productId}`, {
-        headers: {
-          Authorization: `Bearer ${token}`,
-        },
+      const res = await axios.post(`${API_BASE_URL}/product/${product.id}/translate`, {
+        languageCode,
       });
-
-      const { url } = res.data;
-      if (url) {
-        // ダウンロードを開始
-        window.open(url, '_blank');
-        setMessage('ダウンロードが開始されました。');
-      } else {
-        setMessage('ダウンロードURLの取得に失敗しました。');
-      }
+      setTranslatedTitle(res.data.translatedTitle);
+      setTranslatedDescription(res.data.translatedDescription);
+      setTranslatedHtmlContent(res.data.translatedHtmlContent);
     } catch (error: unknown) {
-      console.error('Download error:', error);
-      setMessage('ダウンロードに失敗しました。');
+      setMessage('翻訳に失敗しました。');
+      console.error('Translation error:', error);
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -68,51 +66,53 @@ const ProductDetail: React.FC = () => {
   return (
     <Container>
       <Typography variant="h4" gutterBottom>
-        {product.title}
+        {translatedTitle || product.title}
       </Typography>
       {/* サムネイルの表示 */}
       <img
         src={product.thumbnailUrl}
         alt={`${product.title} Thumbnail`}
-        style={{ maxWidth: '100%', height: 'auto' }}
+        style={{ maxWidth: '100%', height: 'auto', marginBottom: '20px' }}
       />
       <Typography variant="body1" gutterBottom>
-        {product.description}
+        {translatedDescription || product.description}
       </Typography>
       <Typography variant="subtitle1" gutterBottom>
         カテゴリ: {product.category}
       </Typography>
 
-      {/* ファイルのプレビュー */}
-      {product.fileType === 'pdf' && (
-        <embed
-          src={product.fileUrl}
-          type="application/pdf"
-          width="100%"
-          height="600px"
-        />
-      )}
-      {product.fileType === 'mp4' && (
-        <video controls width="100%">
-          <source src={product.fileUrl} type="video/mp4" />
-          Your browser does not support the video tag.
-        </video>
-      )}
-      {product.fileType === 'mp3' && (
-        <audio controls>
-          <source src={product.fileUrl} type="audio/mpeg" />
-          Your browser does not support the audio element.
-        </audio>
-      )}
+      {/* HTMLコンテンツの表示 */}
+      <div
+        style={{ marginTop: '20px', border: '1px solid #ccc', padding: '15px', borderRadius: '5px' }}
+        dangerouslySetInnerHTML={{
+          __html: translatedHtmlContent || product.htmlContent,
+        }}
+      />
 
-      {/* ダウンロードボタン */}
-      <Button variant="contained" color="primary" onClick={handleDownload} style={{ marginTop: '20px' }}>
-        ダウンロード
-      </Button>
+      {/* 翻訳ボタン */}
+      <div style={{ marginTop: '20px' }}>
+        <Button
+          variant="contained"
+          color="primary"
+          onClick={() => handleTranslate('en')}
+          disabled={loading}
+          style={{ marginRight: '10px' }}
+        >
+          英語に翻訳
+        </Button>
+        <Button
+          variant="contained"
+          color="secondary"
+          onClick={() => handleTranslate('ja')}
+          disabled={loading}
+        >
+          日本語に戻す
+        </Button>
+      </div>
 
-      {message && <Typography variant="body1" style={{ marginTop: '10px' }}>{message}</Typography>}
+      {loading && <Typography variant="body1" style={{ marginTop: '10px' }}>翻訳中...</Typography>}
+      {message && <Typography variant="body1" style={{ marginTop: '10px', color: 'red' }}>{message}</Typography>}
     </Container>
   );
 };
-
 export default ProductDetail;
