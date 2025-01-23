@@ -2,6 +2,7 @@
 import { DataTypes, Model, HasManyGetAssociationsMixin } from 'sequelize';
 import sequelize from '../config/database';
 import Product from './Product';
+import DownloadHistory from './DownloadHistory';
 
 class User extends Model {
   public id!: number;
@@ -15,6 +16,7 @@ class User extends Model {
 
   // Association methods
   public getProducts!: HasManyGetAssociationsMixin<Product>;
+  public downloadHistories?: DownloadHistory[];
 }
 
 User.init(
@@ -52,8 +54,5 @@ User.init(
     tableName: 'users',
   }
 );
-
-User.hasMany(Product, { foreignKey: 'providerId', as: 'products' });
-Product.belongsTo(User, { foreignKey: 'providerId', as: 'provider' });
 
 export default User;

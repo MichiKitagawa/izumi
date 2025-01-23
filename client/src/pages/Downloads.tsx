@@ -1,12 +1,12 @@
-// client/src/pages/Downloads.tsx
+// src/pages/Downloads.tsx
 import React, { useEffect, useState } from 'react';
-import { Typography, List, ListItem, ListItemText } from '@mui/material';
+import { Typography, List, ListItem, ListItemText, Divider } from '@mui/material';
 
 interface DownloadedFile {
   id: number;
   title: string;
   fileType: string;
-  data: string; // Data URL
+  data: string; // プリサインドURL
 }
 
 const Downloads: React.FC = () => {
@@ -32,15 +32,21 @@ const Downloads: React.FC = () => {
 
   return (
     <div>
-      <Typography variant="h6">ダウンロードした作品</Typography>
+      <Typography variant="h6" gutterBottom>ダウンロードした作品</Typography>
       <List>
+        {downloadedFiles.length === 0 && (
+          <Typography variant="body1">まだダウンロードしたファイルがありません。</Typography>
+        )}
         {downloadedFiles.map(file => (
-          <ListItem key={file.id}>
-            <ListItemText
-              primary={file.title}
-              secondary={renderFile(file)}
-            />
-          </ListItem>
+          <React.Fragment key={file.id}>
+            <ListItem alignItems="flex-start">
+              <ListItemText
+                primary={file.title}
+                secondary={renderFile(file)}
+              />
+            </ListItem>
+            <Divider component="li" />
+          </React.Fragment>
         ))}
       </List>
     </div>

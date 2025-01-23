@@ -4,6 +4,7 @@ import sequelize from './config/database';
 import authRoutes from './routes/auth'; // Auth ルートのインポート
 import profileRoutes from './routes/profile'; // 追加
 import cors from 'cors';
+import './models'; 
 import dotenv from 'dotenv';
 import adminRoutes from './routes/admin';
 import productRoutes from './routes/product';

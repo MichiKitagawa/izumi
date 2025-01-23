@@ -2,6 +2,8 @@
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
 import User from './User';
+import ProductVersion from './ProductVersion';
+import DownloadHistory from './DownloadHistory';
 
 class Product extends Model {
   public id!: number;
@@ -9,13 +11,19 @@ class Product extends Model {
   public description!: string;
   public category!: string;
   public fileUrl!: string;
-  public thumbnailUrl!: string
+  public thumbnailUrl!: string | null;
   public htmlContent!: string | null;
   public fileType!: string; // PDF, MP4, MP3
   public fileSize!: number; // in bytes
   public providerId!: number;
+  public versionstatus!: string; // 'original'
+
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
+
+  // 関連プロパティの宣言
+  public versions?: ProductVersion[];
+  public downloadHistories?: DownloadHistory[];
 }
 
 Product.init(
@@ -26,7 +34,7 @@ Product.init(
       primaryKey: true,
     },
     title: {
-      type: DataTypes.STRING,
+      type: DataTypes.STRING(255),
       allowNull: false,
     },
     description: {
@@ -34,18 +42,18 @@ Product.init(
       allowNull: false,
     },
     category: {
-      type: DataTypes.STRING,
+      type: DataTypes.STRING(255),
       allowNull: false,
     },
     fileUrl: {
       type: DataTypes.STRING,
       allowNull: false,
     },
-    thumbnailUrl: { 
+    thumbnailUrl: {
       type: DataTypes.STRING,
-      allowNull: true, 
+      allowNull: true,
     },
-    htmlContent: { // 新しいフィールドを追加
+    htmlContent: {
       type: DataTypes.TEXT,
       allowNull: true,
     },
@@ -64,6 +72,13 @@ Product.init(
         model: User,
         key: 'id',
       },
+      onDelete: 'CASCADE',
+      onUpdate: 'CASCADE',
+    },
+    versionstatus: {
+      type: DataTypes.STRING(50),
+      allowNull: true,
+      defaultValue: 'original',
     },
   },
   {

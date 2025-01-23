@@ -1,8 +1,21 @@
+// src/pages/ProductDetail.tsx
 import React, { useState, useEffect } from 'react'; 
 import axios from 'axios';
 import { useParams } from 'react-router-dom';
-import { Container, Typography, Button } from '@mui/material';
+import { Container, Typography, Button, CircularProgress } from '@mui/material';
 import { API_BASE_URL } from '../api';
+
+interface ProductVersion {
+  id: number;
+  dataType: string;
+  languageCode: string;
+  versionData: {
+    title: string;
+    description: string;
+    htmlContent: string | null;
+  };
+  isOriginal: boolean;
+}
 
 interface Product {
   id: number;
@@ -10,7 +23,17 @@ interface Product {
   description: string;
   category: string;
   thumbnailUrl: string;
-  htmlContent: string; // HTMLデータを含むフィールド
+  htmlContent: string;
+  versions: ProductVersion[];
+  fileType: string; // ファイルタイプを追加
+}
+
+interface DownloadedFile {
+  id: number;
+  title: string;
+  fileType: string;
+  versionId: number;
+  data: string; // Data URL
 }
 
 const ProductDetail: React.FC = () => {
@@ -21,12 +44,17 @@ const ProductDetail: React.FC = () => {
   const [translatedHtmlContent, setTranslatedHtmlContent] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [message, setMessage] = useState('');
+  const [downloading, setDownloading] = useState<boolean>(false);
 
   useEffect(() => {
     const fetchProduct = async () => {
       try {
         // 商材詳細取得APIからデータを取得
-        const res = await axios.get(`${API_BASE_URL}/product/${productId}`);
+        const res = await axios.get(`${API_BASE_URL}/product/${productId}`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`, // トークンを追加
+          },
+        });
         setProduct(res.data.product);
       } catch (error: unknown) {
         setMessage('商品情報の取得に失敗しました。');
@@ -43,6 +71,10 @@ const ProductDetail: React.FC = () => {
     try {
       const res = await axios.post(`${API_BASE_URL}/product/${product.id}/translate`, {
         languageCode,
+      }, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`, // トークンを追加
+        },
       });
       setTranslatedTitle(res.data.translatedTitle);
       setTranslatedDescription(res.data.translatedDescription);
@@ -52,6 +84,53 @@ const ProductDetail: React.FC = () => {
       console.error('Translation error:', error);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleDownload = async () => {
+    if (!product) return;
+    setDownloading(true);
+    setMessage('');
+    try {
+      // オリジナルバージョンを取得
+      const originalVersion = product.versions.find(v => v.isOriginal);
+      if (!originalVersion) {
+        throw new Error('オリジナルバージョンが見つかりません。');
+      }
+
+      const versionId = originalVersion.id;
+      const res = await axios.get(`${API_BASE_URL}/download/presigned-url/${versionId}`, {
+        headers: {
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
+        },
+      });
+      const { url } = res.data;
+
+      // ダウンロードリンクを作成してクリック
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = product.title; // ファイル名を設定
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      // ダウンロード履歴をlocalStorageに保存
+      const downloadedFiles: DownloadedFile[] = JSON.parse(localStorage.getItem('downloadedFiles') || '[]');
+      downloadedFiles.push({
+        id: product.id,
+        title: product.title,
+        fileType: product.fileType || 'unknown', // デフォルト値を設定
+        versionId: versionId,
+        data: url,
+      });
+      localStorage.setItem('downloadedFiles', JSON.stringify(downloadedFiles));
+
+      setMessage('ダウンロードが開始されました。');
+    } catch (error: unknown) {
+      setMessage('ダウンロードに失敗しました。');
+      console.error('Download error:', error);
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -110,9 +189,22 @@ const ProductDetail: React.FC = () => {
         </Button>
       </div>
 
-      {loading && <Typography variant="body1" style={{ marginTop: '10px' }}>翻訳中...</Typography>}
-      {message && <Typography variant="body1" style={{ marginTop: '10px', color: 'red' }}>{message}</Typography>}
+      {/* ダウンロードボタン */}
+      <div style={{ marginTop: '20px' }}>
+        <Button
+          variant="contained"
+          color="success"
+          onClick={handleDownload}
+          disabled={downloading}
+        >
+          ダウンロード
+        </Button>
+      </div>
+
+      {(loading || downloading) && <CircularProgress style={{ marginTop: '10px' }} />}
+      {message && <Typography variant="body1" style={{ marginTop: '10px', color: 'green' }}>{message}</Typography>}
     </Container>
   );
 };
+
 export default ProductDetail;

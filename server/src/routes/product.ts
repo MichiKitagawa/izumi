@@ -1,27 +1,22 @@
 // src/routes/product.ts
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
-import { S3Client, PutObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
 import { authenticateToken, authorizeRoles } from '../middleware/authenticate';
-import Product from '../models/Product';
+import { Product, ProductVersion } from '../models'; // models/index.ts からインポート
 import dotenv from 'dotenv';
-import path from 'path';
+import * as path from 'path';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import pdfParse from 'pdf-parse';
-import { DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
-import Translation from '../models/Translation'; // Translationモデルをインポート
 import AIFactory from '../../../shared/services/aiFactory';
 
-// 環境変数のロード
 dotenv.config();
 
 const router = Router();
 
 // ファイル名をサニタイズする関数
 const sanitizeFilename = (filename: string): string => {
-  // ファイル名からディレクトリパスを削除
   const baseName = path.basename(filename);
-  // 非ASCII文字をアンダースコアに置換
   return baseName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
 };
 
@@ -31,12 +26,12 @@ const AWS_S3_BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME;
 
 if (!AWS_S3_REGION) {
   console.error('Error: AWS_S3_REGION is not defined in environment variables.');
-  process.exit(1); // アプリケーションを終了
+  process.exit(1);
 }
 
 if (!AWS_S3_BUCKET_NAME) {
   console.error('Error: AWS_S3_BUCKET_NAME is not defined in environment variables.');
-  process.exit(1); // アプリケーションを終了
+  process.exit(1);
 }
 
 const s3 = new S3Client({
@@ -153,10 +148,18 @@ router.post(
         htmlContent, // HTMLコンテンツを保存
       });
 
-      // デバッグログ
-      console.log('Product created:', product);
-      console.log('Thumbnail URL:', thumbnailUrl);
-      console.log('File URL:', fileUrl);
+      // ProductVersionの作成（オリジナルバージョン）
+      await ProductVersion.create({
+        productId: product.id,
+        dataType: 'original',
+        languageCode: 'ja', // 元の言語
+        versionData: {
+          title: product.title,
+          description: product.description,
+          htmlContent: product.htmlContent,
+        },
+        isOriginal: true,
+      });
 
       res.status(201).json({ message: 'Product uploaded successfully.', product });
     } catch (error) {
@@ -169,22 +172,21 @@ router.post(
 );
 
 // 商材一覧取得API
-router.get('/list', async (req: Request, res: Response) => {
+router.get('/list', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
     const products = await Product.findAll({
-      attributes: ['id', 'title', 'description', 'thumbnailUrl'], // 必要な属性のみ
+      attributes: ['id', 'title', 'description', 'thumbnailUrl'],
     });
 
     // サムネイルのプリサインドURLを生成
     const productsWithPresignedUrls = await Promise.all(
       products.map(async (product) => {
         try {
-          // サムネイルURLが無い場合は、デフォルトのURLまたは空で返す
           if (!product.thumbnailUrl) {
             console.warn(`Product with ID ${product.id} has no thumbnail URL.`);
             return {
               ...product.toJSON(),
-              thumbnailUrl: null, // ここで「null」を設定
+              thumbnailUrl: null,
             };
           }
 
@@ -194,7 +196,7 @@ router.get('/list', async (req: Request, res: Response) => {
             Key: thumbnailObjectKey,
           });
 
-          const thumbnailPresignedUrl = await getSignedUrl(s3, thumbnailCommand, { expiresIn: 600 }); // 10分の有効期限
+          const thumbnailPresignedUrl = await getSignedUrl(s3, thumbnailCommand, { expiresIn: 600 });
 
           return {
             ...product.toJSON(),
@@ -204,7 +206,7 @@ router.get('/list', async (req: Request, res: Response) => {
           console.error(`Error generating presigned URL for product ID ${product.id}:`, err);
           return {
             ...product.toJSON(),
-            thumbnailUrl: null, // エラー場合も空に返す
+            thumbnailUrl: null,
           };
         }
       })
@@ -217,28 +219,30 @@ router.get('/list', async (req: Request, res: Response) => {
   }
 });
 
-
-
 // フィーチャー商材取得API
-router.get('/featured', async (req: Request, res: Response) => {
+router.get('/featured', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
     const product = await Product.findOne({
       order: [['createdAt', 'DESC']],
-      attributes: ['id', 'title', 'description', 'thumbnailUrl'], // 必要な属性のみ
+      attributes: ['id', 'title', 'description', 'thumbnailUrl'],
     });
 
     if (!product) {
-      return res.status(404).json({ message: 'フィーチャー商材が見つかりませんでした。' });
+      res.status(404).json({ message: 'フィーチャー商材が見つかりませんでした。' });
+      return;
     }
 
-    // サムネイルのプリサインドURLを生成
+    if (!product.thumbnailUrl) {
+      res.status(400).json({ message: 'Thumbnail URL is missing.' });
+      return;
+    }
+
     const thumbnailObjectKey = decodeURIComponent(product.thumbnailUrl.split('.com/')[1]);
     const thumbnailCommand = new GetObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET_NAME!,
       Key: thumbnailObjectKey,
     });
-
-    const thumbnailPresignedUrl = await getSignedUrl(s3, thumbnailCommand, { expiresIn: 600 }); // 10分の有効期限
+    const thumbnailPresignedUrl = await getSignedUrl(s3, thumbnailCommand, { expiresIn: 600 });
 
     res.status(200).json({
       product: {
@@ -253,17 +257,18 @@ router.get('/featured', async (req: Request, res: Response) => {
 });
 
 // ユーザーごとの商材一覧取得API
-router.get('/user-products', authenticateToken, async (req: Request, res: Response) => {
+router.get('/user-products', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   const userId = req.user?.id;
 
   if (!userId) {
-    return res.status(401).json({ message: 'Unauthorized' });
+    res.status(401).json({ message: 'Unauthorized' });
+    return;
   }
 
   try {
     const products = await Product.findAll({
-      where: { providerId: userId }, // 正しい条件
-      attributes: ['id', 'title', 'description', 'thumbnailUrl', 'createdAt'], // 必要な属性のみ
+      where: { providerId: userId },
+      attributes: ['id', 'title', 'description', 'thumbnailUrl', 'createdAt'],
     });
 
     // サムネイルのプリサインドURLを生成
@@ -295,30 +300,28 @@ router.get('/user-products', authenticateToken, async (req: Request, res: Respon
 });
 
 // 商材詳細取得API
-router.get('/:id', async (req: Request, res: Response) => {
+router.get('/:id', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
 
   try {
-    const product = await Product.findByPk(id, {
-      attributes: [
-        'id', 
-        'title', 
-        'description', 
-        'category', 
-        'thumbnailUrl', 
-        'fileType', 
-        'fileSize', 
-        'providerId', 
-        'createdAt',
-        'htmlContent',
-      ],
+    // 最新のProductVersionを取得（必要に応じてフィルタリング）
+    const version = await ProductVersion.findOne({
+      where: { productId: id, isOriginal: true }, // オリジナルバージョン
+      include: [{ model: Product, as: 'product' }],
     });
 
-    if (!product) {
-      return res.status(404).json({ message: '商材が見つかりませんでした。' });
+    if (!version || !version.product) {
+      res.status(404).json({ message: '商材が見つかりませんでした。' });
+      return;
     }
 
-    // サムネイルのプリサインドURL生成
+    const product = version.product;
+
+    if (!product.thumbnailUrl) {
+      res.status(400).json({ message: 'Thumbnail URL is missing.' });
+      return;
+    }
+
     const thumbnailObjectKey = decodeURIComponent(product.thumbnailUrl.split('.com/')[1]);
     const thumbnailCommand = new GetObjectCommand({
       Bucket: process.env.AWS_S3_BUCKET_NAME!,
@@ -326,11 +329,13 @@ router.get('/:id', async (req: Request, res: Response) => {
     });
     const thumbnailPresignedUrl = await getSignedUrl(s3, thumbnailCommand, { expiresIn: 600 });
 
-    // レスポンスを返す
     res.status(200).json({
       product: {
         ...product.toJSON(),
         thumbnailUrl: thumbnailPresignedUrl,
+        versions: await ProductVersion.findAll({
+          where: { productId: id },
+        }),
       },
     });
   } catch (error) {
@@ -340,12 +345,13 @@ router.get('/:id', async (req: Request, res: Response) => {
 });
 
 // 商材の翻訳API
-router.post('/:id/translate', async (req: Request, res: Response) => {
+router.post('/:id/translate', authenticateToken, authorizeRoles('provider', 'editor', 'subscriber'), async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   const { languageCode } = req.body;
 
   if (!languageCode) {
-    return res.status(400).json({ message: 'languageCodeが必要です。' });
+    res.status(400).json({ message: 'languageCodeが必要です。' });
+    return;
   }
 
   try {
@@ -356,23 +362,26 @@ router.post('/:id/translate', async (req: Request, res: Response) => {
     });
 
     if (!product) {
-      return res.status(404).json({ message: '商材が見つかりませんでした。' });
+      res.status(404).json({ message: '商材が見つかりませんでした。' });
+      return;
     }
 
     console.log('Product found:', product);
 
-    // 翻訳済みデータを確認
-    const existingTranslation = await Translation.findOne({
-      where: { productId: Number(id), languageCode },
+    // バージョンデータを確認
+    const existingVersion = await ProductVersion.findOne({
+      where: { productId: Number(id), dataType: 'translation', languageCode },
     });
 
-    if (existingTranslation) {
-      // 翻訳済みデータを返す
-      return res.status(200).json({
-        translatedTitle: existingTranslation.translatedTitle,
-        translatedDescription: existingTranslation.translatedDescription,
-        translatedHtmlContent: existingTranslation.translatedHtmlContent, // 翻訳済みHTMLを返す
+    if (existingVersion) {
+      // 既存のバージョンデータを返す
+      const versionData = existingVersion.versionData as { title: string; description: string; htmlContent: string | null };
+      res.status(200).json({
+        translatedTitle: versionData.title,
+        translatedDescription: versionData.description,
+        translatedHtmlContent: versionData.htmlContent,
       });
+      return;
     }
 
     // 翻訳サービスを利用
@@ -385,22 +394,29 @@ router.post('/:id/translate', async (req: Request, res: Response) => {
       ? await translationService.translate(product.htmlContent, languageCode) // HTMLコンテンツの翻訳
       : null;
 
-    // 翻訳結果を保存
-    console.log('Saving translation to database');
-    const newTranslation = await Translation.create({
+    // バージョンデータの作成
+    const versionData = {
+      title: translatedTitle,
+      description: translatedDescription,
+      htmlContent: translatedHtmlContent,
+    };
+
+    // バージョンデータを保存
+    console.log('Saving translated version to product_versions');
+    const newVersion = await ProductVersion.create({
       productId: Number(id),
+      dataType: 'translation',
       languageCode,
-      translatedTitle,
-      translatedDescription,
-      translatedHtmlContent, // 翻訳済みHTMLを保存
+      versionData,
+      isOriginal: false,
     });
 
-    console.log('Translation saved:', newTranslation);
+    console.log('Translated version saved:', newVersion);
 
     res.status(201).json({
-      translatedTitle: newTranslation.translatedTitle,
-      translatedDescription: newTranslation.translatedDescription,
-      translatedHtmlContent: newTranslation.translatedHtmlContent,
+      translatedTitle: translatedTitle,
+      translatedDescription: translatedDescription,
+      translatedHtmlContent: translatedHtmlContent,
     });
   } catch (error) {
     console.error('Error in translation process:', error);
@@ -409,39 +425,48 @@ router.post('/:id/translate', async (req: Request, res: Response) => {
 });
 
 // 商材削除API
-router.delete('/:id', authenticateToken, authorizeRoles('subscriber', 'provider', 'admin'), async (req: Request, res: Response) => {
-  const { id } = req.params;
+router.delete(
+  '/:id',
+  authenticateToken,
+  authorizeRoles('subscriber', 'provider', 'admin'),
+  async (req: Request, res: Response): Promise<void> => {
+    const { id } = req.params;
 
-  try {
-    const product = await Product.findByPk(id);
+    try {
+      const product = await Product.findByPk(id);
 
-    // 商品が存在しない場合
-    if (!product) {
-      return res.status(404).json({ message: '商材が見つかりませんでした。' });
+      // 商材が存在しない場合
+      if (!product) {
+        res.status(404).json({ message: '商材が見つかりませんでした。' });
+        return;
+      }
+
+      // URLの確認（存在しない場合にエラーハンドリング）
+      const fileKey = product.fileUrl ? product.fileUrl.split('.com/')[1] : null;
+      const thumbnailKey = product.thumbnailUrl ? product.thumbnailUrl.split('.com/')[1] : null;
+
+      // S3からの削除を実行
+      if (fileKey || thumbnailKey) {
+        await Promise.all([
+          fileKey
+            ? s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_S3_BUCKET_NAME!, Key: fileKey }))
+            : Promise.resolve(),
+          thumbnailKey
+            ? s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_S3_BUCKET_NAME!, Key: thumbnailKey }))
+            : Promise.resolve(),
+        ]);
+      }
+
+      // データベースから商材を削除（関連するProductVersionも削除）
+      await ProductVersion.destroy({ where: { productId: id } });
+      await product.destroy();
+
+      res.status(200).json({ message: '商材を削除しました。' });
+    } catch (error) {
+      console.error('Error deleting product:', error);
+      res.status(500).json({ message: '商材の削除に失敗しました。' });
     }
-
-    // URLの確認（存在しない場合にエラーハンドリング）
-    const fileKey = product.fileUrl ? product.fileUrl.split('.com/')[1] : null;
-    const thumbnailKey = product.thumbnailUrl ? product.thumbnailUrl.split('.com/')[1] : null;
-
-    // S3からの削除を実行
-    if (fileKey || thumbnailKey) {
-      await Promise.all([
-        fileKey && s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_S3_BUCKET_NAME!, Key: fileKey })),
-        thumbnailKey && s3.send(new DeleteObjectCommand({ Bucket: process.env.AWS_S3_BUCKET_NAME!, Key: thumbnailKey })),
-      ]);
-    }
-
-    // データベースから商材を削除
-    await product.destroy();
-
-    res.status(200).json({ message: '商材を削除しました。' });
-  } catch (error) {
-    console.error('Error deleting product:', error);
-    res.status(500).json({ message: '商材の削除に失敗しました。' });
   }
-});
-
-
+);
 
 export default router;

@@ -1,10 +1,9 @@
-// server/src/routes/download.ts 
+// src/routes/download.ts 
 import { Router, Request, Response } from 'express';
 import { authenticateToken } from '../middleware/authenticate';
-import Product from '../models/Product';
-import DownloadHistory from '../models/DownloadHistory';
 import { S3Client, GetObjectCommand } from '@aws-sdk/client-s3';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
+import { ProductVersion, DownloadHistory } from '../models'; // models/index.ts からインポート
 
 const router = Router();
 
@@ -27,34 +26,42 @@ const s3 = new S3Client({
 });
 
 // ユーザーのアクセス権を確認する関数の例
-async function checkUserAccess(userId: number, productId: string): Promise<boolean> {
-  // ここにユーザーがコンテンツにアクセスできるかどうかを確認するロジックを実装
+async function checkUserAccess(userId: number, versionId: number): Promise<boolean> {
+  // 実装: ユーザーがダウンロード権限を持っているか確認
   // 例: ユーザーが購入済みか、許可された役割を持っているかなど
   // 現在は仮実装として常にtrueを返す
   return true;
 }
 
 // プリサインドURL生成エンドポイント
-router.get('/presigned-url/:productId', authenticateToken, async (req: Request, res: Response) => {
-  const { productId } = req.params;
+router.get('/presigned-url/:versionId', authenticateToken, async (req: Request, res: Response) => {
+  const { versionId } = req.params;
   const userId = (req as AuthenticatedRequest).user.id;
 
   try {
-    const product = await Product.findByPk(productId);
-    if (!product) {
-      return res.status(404).json({ message: 'Product not found.' });
+    const version = await ProductVersion.findByPk(versionId, {
+      include: [{ model: ProductVersion.sequelize?.models.Product, as: 'product' }],
+    });
+
+    if (!version || !version.product) {
+      return res.status(404).json({ message: 'Product version not found.' });
     }
 
     // ユーザーがこのコンテンツにアクセス権を持っているか確認
-    const isAuthorized = await checkUserAccess(userId, productId);
+    const isAuthorized = await checkUserAccess(userId, version.id);
     if (!isAuthorized) {
       return res.status(403).json({ message: 'Access denied.' });
     }
 
     // S3オブジェクトキーを抽出
-    const objectKey = product.fileUrl.split('.com/')[1];
-    if (!objectKey) {
+    const fileUrl = version.product.fileUrl;
+    if (!fileUrl) {
       return res.status(400).json({ message: 'Invalid file URL.' });
+    }
+
+    const objectKey = fileUrl.split('.com/')[1];
+    if (!objectKey) {
+      return res.status(400).json({ message: 'Invalid file URL format.' });
     }
 
     const command = new GetObjectCommand({
@@ -68,7 +75,8 @@ router.get('/presigned-url/:productId', authenticateToken, async (req: Request, 
     // ダウンロード履歴の記録
     await DownloadHistory.create({
       userId,
-      productId: product.id,
+      productId: version.product.id,
+      versionId: version.id,
       downloadDate: new Date(),
       duration: 0, // 必要に応じて更新
     });
