@@ -4,6 +4,7 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import User from '../models/User';
 import { body, validationResult } from 'express-validator';
+import { authenticateToken } from '../middleware/authenticate';
 
 const router = Router();
 
@@ -80,6 +81,18 @@ router.post('/login', async (req: Request, res: Response) => {
     console.error(error);
     res.status(500).json({ message: 'Server error.' });
   }
+});
+
+router.get('/verify', authenticateToken, (req: Request, res: Response) => {
+  const user = (req as any).user;
+  res.status(200).json({
+    message: 'Token is valid',
+    user: {
+      id: user.id,
+      email: user.email,
+      role: user.role,
+    },
+  });
 });
 
 export default router;

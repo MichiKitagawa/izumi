@@ -16,6 +16,7 @@ interface AuthContextType {
   setUser: (user: User | null) => void;
   role: string | null;
   setRole: (role: string | null) => void;
+  loading: boolean; // 追加
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -25,34 +26,42 @@ const AuthContext = createContext<AuthContextType>({
   setUser: () => {},
   role: null,
   setRole: () => {},
+  loading: true, // 初期値
 });
 
 export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) => {
   const [token, setToken] = useState<string | null>(null);
   const [user, setUser] = useState<User | null>(null);
   const [role, setRole] = useState<string | null>(null);
+  const [loading, setLoading] = useState<boolean>(true); // 追加
 
   useEffect(() => {
     const verifyToken = async () => {
       const storedToken = localStorage.getItem('token');
       const storedUser = localStorage.getItem('user');
       const storedRole = localStorage.getItem('role');
+      console.log('Stored Token:', storedToken);
+      console.log('Stored User:', storedUser);
+      console.log('Stored Role:', storedRole);
       if (storedToken) {
         try {
-          // トークンの検証APIエンドポイントを呼び出す
-          const res = await axios.get(`${API_BASE_URL}/api/auth/verify`, {
+          const res = await axios.get(`${API_BASE_URL}/auth/verify`, {
             headers: { Authorization: `Bearer ${storedToken}` },
           });
+          console.log('Token Verification Response:', res.data);
           if (res.status === 200) {
             setToken(storedToken);
+            console.log('Token set in context:', storedToken); // 追加
             if (storedUser) {
               setUser(JSON.parse(storedUser));
+              console.log('User set in context:', JSON.parse(storedUser)); // 追加
             }
             if (storedRole) {
               setRole(storedRole);
+              console.log('Role set in context:', storedRole); // 追加
             }
           }
-        } catch (error) {
+        } catch (error: unknown) {
           console.error('Token verification failed:', error);
           setToken(null);
           setUser(null);
@@ -62,8 +71,8 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
           localStorage.removeItem('role');
         }
       }
-    };
-
+      setLoading(false); // トークン検証完了
+    };  
     verifyToken();
   }, []);
 
@@ -95,7 +104,7 @@ export const AuthProvider: React.FC<{ children: ReactNode }> = ({ children }) =>
   };
 
   return (
-    <AuthContext.Provider value={{ token, setToken: updateToken, user, setUser: updateUser, role, setRole: updateRole }}>
+    <AuthContext.Provider value={{ token, setToken: updateToken, user, setUser: updateUser, role, setRole: updateRole, loading }}>
       {children}
     </AuthContext.Provider>
   );

@@ -1,7 +1,5 @@
-// src/models/Subscription.ts
 import { DataTypes, Model } from 'sequelize';
 import sequelize from '../config/database';
-import User from './User';
 
 class Subscription extends Model {
   public id!: number;
@@ -10,6 +8,7 @@ class Subscription extends Model {
   public status!: string; // 'active', 'canceled'
   public startDate!: Date;
   public endDate!: Date | null;
+  public stripeSubscriptionId!: string;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 }
@@ -25,9 +24,11 @@ Subscription.init(
       type: DataTypes.INTEGER,
       allowNull: false,
       references: {
-        model: User,
+        model: 'users', // テーブル名
         key: 'id',
       },
+      onUpdate: 'CASCADE',
+      onDelete: 'CASCADE',
     },
     plan: {
       type: DataTypes.STRING,
@@ -47,14 +48,15 @@ Subscription.init(
       type: DataTypes.DATE,
       allowNull: true,
     },
+    stripeSubscriptionId: {
+      type: DataTypes.STRING,
+      allowNull: false,
+    },
   },
   {
     sequelize,
     tableName: 'subscriptions',
   }
 );
-
-User.hasOne(Subscription, { foreignKey: 'userId', as: 'subscription' });
-Subscription.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 export default Subscription;

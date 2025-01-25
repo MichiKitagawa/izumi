@@ -1,8 +1,8 @@
-// src/models/User.ts
 import { DataTypes, Model, HasManyGetAssociationsMixin } from 'sequelize';
 import sequelize from '../config/database';
 import Product from './Product';
 import DownloadHistory from './DownloadHistory';
+import Subscription from './Subscription';
 
 class User extends Model {
   public id!: number;
@@ -11,12 +11,14 @@ class User extends Model {
   public name!: string;
   public profileImage!: string;
   public role!: string; // 'subscriber', 'provider', 'admin'
+  public stripeCustomerId!: string | null;
   public readonly createdAt!: Date;
   public readonly updatedAt!: Date;
 
   // Association methods
   public getProducts!: HasManyGetAssociationsMixin<Product>;
   public downloadHistories?: DownloadHistory[];
+  public subscription?: Subscription;
 }
 
 User.init(
@@ -40,13 +42,17 @@ User.init(
       allowNull: false,
     },
     profileImage: {
-      type: DataTypes.TEXT, // STRINGからTEXTに変更
+      type: DataTypes.TEXT,
       allowNull: true,
     },
     role: {
       type: DataTypes.STRING,
       allowNull: false,
       defaultValue: 'subscriber',
+    },
+    stripeCustomerId: {
+      type: DataTypes.STRING,
+      allowNull: true,
     },
   },
   {

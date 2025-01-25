@@ -1,8 +1,8 @@
 // server/src/index.ts 
 import express from 'express';
 import sequelize from './config/database';
-import authRoutes from './routes/auth'; // Auth ルートのインポート
-import profileRoutes from './routes/profile'; // 追加
+import authRoutes from './routes/auth';
+import profileRoutes from './routes/profile';
 import cors from 'cors';
 import './models'; 
 import dotenv from 'dotenv';
@@ -13,26 +13,30 @@ import aiRoutes from './routes/ai';
 import downloadRoutes from './routes/download';
 import adRoutes from './routes/ad';
 import helmet from 'helmet';
+import bodyParser from 'body-parser';
 
 dotenv.config();
 
 const app = express();
 
-// フロントエンドのURLを環境変数から取得（推奨）
+// フロントエンドのURLを環境変数から取得
 const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 // CORSの設定
 app.use(cors({
-  origin: FRONTEND_URL, // フロントエンドのURLに合わせて調整
+  origin: FRONTEND_URL,
   credentials: true,
 }));
 
 app.use(express.json());
 app.use(helmet());
 
+// Webhookエンドポイントの設定
+app.use('/api/webhook', bodyParser.raw({ type: 'application/json' }));
+
 // ルートのマウント
 app.use('/api/auth', authRoutes);
-app.use('/api/profile', profileRoutes); // 追加
+app.use('/api/profile', profileRoutes);
 app.use('/api/admin', adminRoutes);
 app.use('/api/product', productRoutes);
 app.use('/api/subscription', subscriptionRoutes);
