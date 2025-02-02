@@ -9,6 +9,7 @@ import * as path from 'path';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
 import pdfParse from 'pdf-parse';
 import AIFactory from '../../../shared/services/aiFactory';
+import checkSubscription from '../middleware/checkSubscription';
 
 dotenv.config();
 
@@ -300,7 +301,10 @@ router.get('/user-products', authenticateToken, async (req: Request, res: Respon
 });
 
 // 商材詳細取得API
-router.get('/:id', authenticateToken, async (req: Request, res: Response): Promise<void> => {
+router.get('/:id',
+  authenticateToken,
+  authorizeRoles('admin', 'subscriber'),
+  checkSubscription(), async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
 
   try {
@@ -345,7 +349,7 @@ router.get('/:id', authenticateToken, async (req: Request, res: Response): Promi
 });
 
 // 商材の翻訳API
-router.post('/:id/translate', authenticateToken, authorizeRoles('provider', 'editor', 'subscriber'), async (req: Request, res: Response): Promise<void> => {
+router.post('/:id/translate', authenticateToken, authorizeRoles('provider', 'editor', 'subscriber'), checkSubscription('ai_usage_limit'), async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   const { languageCode } = req.body;
 

@@ -1,7 +1,7 @@
-// src/pages/ProductDetail.tsx
+// client/src/pages/ProductDetail.tsx
 import React, { useState, useEffect } from 'react'; 
 import axios from 'axios';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Container, Typography, Button, CircularProgress } from '@mui/material';
 import { API_BASE_URL } from '../api';
 
@@ -25,7 +25,7 @@ interface Product {
   thumbnailUrl: string;
   htmlContent: string;
   versions: ProductVersion[];
-  fileType: string; // ファイルタイプを追加
+  fileType: string;
 }
 
 interface DownloadedFile {
@@ -33,7 +33,7 @@ interface DownloadedFile {
   title: string;
   fileType: string;
   versionId: number;
-  data: string; // Data URL
+  data: string;
 }
 
 const ProductDetail: React.FC = () => {
@@ -45,14 +45,39 @@ const ProductDetail: React.FC = () => {
   const [loading, setLoading] = useState<boolean>(false);
   const [message, setMessage] = useState('');
   const [downloading, setDownloading] = useState<boolean>(false);
+  const [subscriptionChecked, setSubscriptionChecked] = useState(false);
+  const navigate = useNavigate();
 
+  // サブスクリプション状態をサーバーから確認する
   useEffect(() => {
+    const checkSubscription = async () => {
+      try {
+        const res = await axios.get(`${API_BASE_URL}/subscription/status`, {
+          headers: {
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
+          },
+        });
+        if (!res.data.active) {
+          navigate('/subscribe', { replace: true });
+        }
+      } catch (error: unknown) {
+        console.error('Error checking subscription:', error);
+        navigate('/subscribe', { replace: true });
+      } finally {
+        setSubscriptionChecked(true);
+      }
+    };
+    checkSubscription();
+  }, [navigate]);
+
+  // サブスクリプションチェック後に商材詳細を取得
+  useEffect(() => {
+    if (!subscriptionChecked) return;
     const fetchProduct = async () => {
       try {
-        // 商材詳細取得APIからデータを取得
         const res = await axios.get(`${API_BASE_URL}/product/${productId}`, {
           headers: {
-            Authorization: `Bearer ${localStorage.getItem('token')}`, // トークンを追加
+            Authorization: `Bearer ${localStorage.getItem('token')}`,
           },
         });
         setProduct(res.data.product);
@@ -62,7 +87,7 @@ const ProductDetail: React.FC = () => {
       }
     };
     fetchProduct();
-  }, [productId]);
+  }, [productId, subscriptionChecked]);
 
   const handleTranslate = async (languageCode: string) => {
     if (!product) return;
@@ -73,7 +98,7 @@ const ProductDetail: React.FC = () => {
         languageCode,
       }, {
         headers: {
-          Authorization: `Bearer ${localStorage.getItem('token')}`, // トークンを追加
+          Authorization: `Bearer ${localStorage.getItem('token')}`,
         },
       });
       setTranslatedTitle(res.data.translatedTitle);
@@ -92,12 +117,10 @@ const ProductDetail: React.FC = () => {
     setDownloading(true);
     setMessage('');
     try {
-      // オリジナルバージョンを取得
       const originalVersion = product.versions.find(v => v.isOriginal);
       if (!originalVersion) {
         throw new Error('オリジナルバージョンが見つかりません。');
       }
-
       const versionId = originalVersion.id;
       const res = await axios.get(`${API_BASE_URL}/download/presigned-url/${versionId}`, {
         headers: {
@@ -105,26 +128,21 @@ const ProductDetail: React.FC = () => {
         },
       });
       const { url } = res.data;
-
-      // ダウンロードリンクを作成してクリック
       const link = document.createElement('a');
       link.href = url;
-      link.download = product.title; // ファイル名を設定
+      link.download = product.title;
       document.body.appendChild(link);
       link.click();
       document.body.removeChild(link);
-
-      // ダウンロード履歴をlocalStorageに保存
       const downloadedFiles: DownloadedFile[] = JSON.parse(localStorage.getItem('downloadedFiles') || '[]');
       downloadedFiles.push({
         id: product.id,
         title: product.title,
-        fileType: product.fileType || 'unknown', // デフォルト値を設定
+        fileType: product.fileType || 'unknown',
         versionId: versionId,
         data: url,
       });
       localStorage.setItem('downloadedFiles', JSON.stringify(downloadedFiles));
-
       setMessage('ダウンロードが開始されました。');
     } catch (error: unknown) {
       setMessage('ダウンロードに失敗しました。');
@@ -134,7 +152,7 @@ const ProductDetail: React.FC = () => {
     }
   };
 
-  if (!product) {
+  if (!subscriptionChecked || !product) {
     return (
       <Container>
         <Typography variant="h6">{message || '読み込み中...'}</Typography>
@@ -147,7 +165,6 @@ const ProductDetail: React.FC = () => {
       <Typography variant="h4" gutterBottom>
         {translatedTitle || product.title}
       </Typography>
-      {/* サムネイルの表示 */}
       <img
         src={product.thumbnailUrl}
         alt={`${product.title} Thumbnail`}
@@ -159,16 +176,12 @@ const ProductDetail: React.FC = () => {
       <Typography variant="subtitle1" gutterBottom>
         カテゴリ: {product.category}
       </Typography>
-
-      {/* HTMLコンテンツの表示 */}
       <div
         style={{ marginTop: '20px', border: '1px solid #ccc', padding: '15px', borderRadius: '5px' }}
         dangerouslySetInnerHTML={{
           __html: translatedHtmlContent || product.htmlContent,
         }}
       />
-
-      {/* 翻訳ボタン */}
       <div style={{ marginTop: '20px' }}>
         <Button
           variant="contained"
@@ -188,8 +201,6 @@ const ProductDetail: React.FC = () => {
           日本語に戻す
         </Button>
       </div>
-
-      {/* ダウンロードボタン */}
       <div style={{ marginTop: '20px' }}>
         <Button
           variant="contained"
@@ -200,7 +211,6 @@ const ProductDetail: React.FC = () => {
           ダウンロード
         </Button>
       </div>
-
       {(loading || downloading) && <CircularProgress style={{ marginTop: '10px' }} />}
       {message && <Typography variant="body1" style={{ marginTop: '10px', color: 'green' }}>{message}</Typography>}
     </Container>

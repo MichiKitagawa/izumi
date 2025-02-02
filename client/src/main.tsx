@@ -1,3 +1,4 @@
+// client/src/main.tsx
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import { BrowserRouter as Router, Routes, Route, Navigate } from 'react-router-dom';
@@ -27,8 +28,7 @@ import UserProducts from './pages/UserProducts';
 import StripeProvider from './context/StripeProvider';
 import Success from './pages/Success';
 import Cancel from './pages/Cancel';
-import Subscribe from './pages/Subscribe'; 
-
+import Subscribe from './pages/Subscribe';
 
 const container = document.getElementById('root');
 const root = createRoot(container!);
@@ -92,16 +92,12 @@ root.render(
               <Route path="ai" element={<AIProcessing />} />
               <Route path="revenue-report" element={<RevenueReport />} />
 
-              {/* 商材詳細ページ */}
+              {/* 商材詳細ページ (サブスク状態チェックは ProductDetail 内で実施) */}
               <Route
                 path="product/:productId"
                 element={
                   <ProtectedRoute>
-                    {localStorage.getItem('isSubscribed') === 'true' ? (
-                      <ProductDetail />
-                    ) : (
-                      <Navigate to="/subscribe" replace />
-                    )}
+                    <ProductDetail />
                   </ProtectedRoute>
                 }
               />

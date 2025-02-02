@@ -4,6 +4,7 @@ import Product from './Product';
 import ProductVersion from './ProductVersion';
 import DownloadHistory from './DownloadHistory';
 import Subscription from './Subscription'; // 追加
+import AIUsageHistory from './AIUsageHistory';
 
 // アソシエーションの定義
 User.hasMany(DownloadHistory, { foreignKey: 'userId', as: 'downloadHistories' });
@@ -20,6 +21,9 @@ ProductVersion.hasMany(DownloadHistory, { foreignKey: 'versionId', as: 'download
 DownloadHistory.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 DownloadHistory.belongsTo(Product, { foreignKey: 'productId', as: 'product' });
 DownloadHistory.belongsTo(ProductVersion, { foreignKey: 'versionId', as: 'version' });
+
+User.hasMany(AIUsageHistory, { foreignKey: 'userId', as: 'aiUsageHistories' });
+AIUsageHistory.belongsTo(User, { foreignKey: 'userId', as: 'user' });
 
 Subscription.belongsTo(User, { foreignKey: 'userId', as: 'user' }); // 追加
 

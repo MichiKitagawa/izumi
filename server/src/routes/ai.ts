@@ -2,11 +2,12 @@
 import { Router, Request, Response } from 'express';
 import { authenticateToken } from '../middleware/authenticate';
 import AIFactory from '../../../shared/services/aiFactory';
+import checkSubscription from '../middleware/checkSubscription';
 
 const router = Router();
 
 // 音声からテキストへの変換
-router.post('/speech-to-text', authenticateToken, async (req: Request, res: Response) => {
+router.post('/speech-to-text', authenticateToken, checkSubscription('ai_usage_limit'),async (req: Request, res: Response) => {
   const { audioContent } = req.body; // base64エンコードされた音声データ
   const speechService = AIFactory.getSpeechToTextService();
 
@@ -20,7 +21,7 @@ router.post('/speech-to-text', authenticateToken, async (req: Request, res: Resp
 });
 
 // テキストから音声への変換
-router.post('/text-to-speech', authenticateToken, async (req: Request, res: Response) => {
+router.post('/text-to-speech', authenticateToken, checkSubscription('ai_usage_limit'), async (req: Request, res: Response) => {
   const { text, languageCode } = req.body;
   const ttsService = AIFactory.getTextToSpeechService();
 
