@@ -15,6 +15,7 @@ dotenv.config();
 
 const router = Router();
 
+// 関数: ファイル名のサニタイズ（不正な文字をアンダースコアに変換）
 const sanitizeFilename = (filename: string): string => {
   const baseName = path.basename(filename);
   return baseName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
@@ -22,17 +23,16 @@ const sanitizeFilename = (filename: string): string => {
 
 const AWS_S3_REGION = process.env.AWS_S3_REGION;
 const AWS_S3_BUCKET_NAME = process.env.AWS_S3_BUCKET_NAME;
-
 if (!AWS_S3_REGION) {
   console.error('Error: AWS_S3_REGION is not defined in environment variables.');
   process.exit(1);
 }
-
 if (!AWS_S3_BUCKET_NAME) {
   console.error('Error: AWS_S3_BUCKET_NAME is not defined in environment variables.');
   process.exit(1);
 }
 
+// S3 クライアントの生成
 const s3 = new S3Client({
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
@@ -41,6 +41,7 @@ const s3 = new S3Client({
   region: AWS_S3_REGION,
 });
 
+// multer の設定（メモリ上に保存）
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
@@ -66,6 +67,7 @@ const upload = multer({
   },
 });
 
+// ルート: 商品アップロード（ファイルとサムネイルのアップロード、PDF の解析、DB 登録）
 router.post(
   '/upload',
   authenticateToken,
@@ -92,6 +94,7 @@ router.post(
     }
     try {
       const timestamp = Date.now();
+      // ファイル名をサニタイズして S3 用のキーを作成
       const sanitizedFileName = sanitizeFilename(file.originalname);
       const fileKey = `${timestamp}_${sanitizedFileName}`;
       const fileParams = {
@@ -104,6 +107,7 @@ router.post(
       await s3.send(fileCommand);
       const fileUrl = `https://${fileParams.Bucket}.s3.${AWS_S3_REGION}.amazonaws.com/${encodeURIComponent(fileParams.Key)}`;
 
+      // サムネイルも同様に S3 にアップロード
       const sanitizedThumbnailName = sanitizeFilename(thumbnail.originalname);
       const thumbnailKey = `thumbnails/${timestamp}_${sanitizedThumbnailName}`;
       const thumbnailParams = {
@@ -116,6 +120,7 @@ router.post(
       await s3.send(thumbnailCommand);
       const thumbnailUrl = `https://${thumbnailParams.Bucket}.s3.${AWS_S3_REGION}.amazonaws.com/${encodeURIComponent(thumbnailParams.Key)}`;
 
+      // PDF ファイルの場合、テキストを抽出して HTML に変換
       let htmlContent: string | null = null;
       if (file.mimetype === 'application/pdf') {
         const pdfBuffer = file.buffer;
@@ -124,6 +129,7 @@ router.post(
         htmlContent = `<div>${extractedText.replace(/\n/g, '<br>')}</div>`;
       }
 
+      // DB に商品情報を登録
       const product = await Product.create({
         title,
         description,
@@ -136,6 +142,7 @@ router.post(
         htmlContent,
       });
 
+      // DB に商品バージョン情報を登録（オリジナル）
       await ProductVersion.create({
         productId: product.id,
         dataType: 'original',
@@ -158,6 +165,7 @@ router.post(
   }
 );
 
+// ルート: 商材一覧の取得（サムネイルに対する presigned URL 生成）
 router.get('/list', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
     const products = await Product.findAll({
@@ -190,6 +198,7 @@ router.get('/list', authenticateToken, async (req: Request, res: Response): Prom
   }
 });
 
+// ルート: フィーチャー商材の取得（最新の商材）
 router.get('/featured', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
     const product = await Product.findOne({
@@ -222,6 +231,7 @@ router.get('/featured', authenticateToken, async (req: Request, res: Response): 
   }
 });
 
+// ルート: ユーザーがアップロードした商材の一覧取得
 router.get('/user-products', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   const userId = req.user?.id;
   if (!userId) {
@@ -259,6 +269,7 @@ router.get('/user-products', authenticateToken, async (req: Request, res: Respon
   }
 });
 
+// ルート: 商品詳細の取得（指定されたIDの商品とそのバージョン情報を取得）
 router.get('/:id',
   authenticateToken,
   authorizeRoles('admin', 'subscriber'),
@@ -295,6 +306,7 @@ router.get('/:id',
   }
 );
 
+// ルート: 商品翻訳の処理（指定言語に翻訳し、DBに保存する）
 router.post('/:id/translate',
   authenticateToken,
   authorizeRoles('provider', 'editor', 'subscriber'),
@@ -362,6 +374,7 @@ router.post('/:id/translate',
   }
 );
 
+// ルート: 商品削除の処理（S3上のファイルも削除）
 router.delete(
   '/:id',
   authenticateToken,
@@ -396,7 +409,7 @@ router.delete(
   }
 );
 
-// [新規追加] 動画再生用presigned URL生成エンドポイント
+// ルート: 動画再生用 presigned URL 生成エンドポイント
 router.get('/stream/:id', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   try {

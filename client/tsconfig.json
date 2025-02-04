@@ -6,7 +6,8 @@
       "@/*": ["src/*"]
     }
   },
-  "files": [],
+  "files": ["src/global.d.ts"],
+  "include": ["src", "../StripeProvider.tsx"],
   "references": [
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.node.json" }

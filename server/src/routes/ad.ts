@@ -1,4 +1,4 @@
-// src/routes/ad.ts
+// server/src/routes/ad.ts
 import { Router, Request, Response } from 'express';
 import { authenticateToken, authorizeRoles } from '../middleware/authenticate';
 import Ad from '../models/Ad';
@@ -9,10 +9,10 @@ const router = Router();
 router.post('/', authenticateToken, authorizeRoles('admin'), async (req: Request, res: Response) => {
   const { adType, contentUrl, targetUrl } = req.body;
 
-  // 入力のバリデーション
-  if (!['video', 'banner'].includes(adType)) {
+  // adType のバリデーションに 'audio' を追加
+  if (!['video', 'audio', 'banner'].includes(adType)) {
     res.status(400).json({ message: 'Invalid ad type.' });
-    return; // 明示的に関数を終了
+    return;
   }
 
   try {
@@ -54,7 +54,7 @@ router.put('/:id', authenticateToken, authorizeRoles('admin'), async (req: Reque
     }
 
     if (adType) {
-      if (!['video', 'banner'].includes(adType)) {
+      if (!['video', 'audio', 'banner'].includes(adType)) {
         res.status(400).json({ message: 'Invalid ad type.' });
         return;
       }
