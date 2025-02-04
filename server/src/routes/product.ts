@@ -129,6 +129,12 @@ router.post(
         htmlContent = `<div>${extractedText.replace(/\n/g, '<br>')}</div>`;
       }
 
+      // ファイル種別の正規化（音声の場合は mp3 とする）
+      let normalizedFileType = file.mimetype.split('/')[1];
+      if (file.mimetype === 'audio/mpeg') {
+        normalizedFileType = 'mp3';
+      }
+
       // DB に商品情報を登録
       const product = await Product.create({
         title,
@@ -136,7 +142,7 @@ router.post(
         category,
         fileUrl: fileUrl,
         thumbnailUrl: thumbnailUrl,
-        fileType: file.mimetype.split('/')[1],
+        fileType: normalizedFileType,
         fileSize: file.size,
         providerId: req.user.id,
         htmlContent,
