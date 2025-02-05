@@ -1,15 +1,28 @@
 // src/pages/UploadProduct.tsx
 import React, { useState } from 'react';
 import axios from 'axios';
-import { TextField, Button, Container, Typography, Select, MenuItem, InputLabel, FormControl } from '@mui/material';
+import {
+  TextField,
+  Button,
+  Container,
+  Typography,
+  Select,
+  MenuItem,
+  InputLabel,
+  FormControl,
+  Box,
+} from '@mui/material';
 import { API_BASE_URL } from '../api';
+
+const availableLanguages = ['ja', 'en', 'es', 'fr', 'de', 'it', 'zh'];
 
 const UploadProduct: React.FC = () => {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [category, setCategory] = useState('');
+  const [language, setLanguage] = useState(availableLanguages[0]); // 初期値: "ja"
   const [file, setFile] = useState<File | null>(null);
-  const [thumbnail, setThumbnail] = useState<File | null>(null); // サムネイル用
+  const [thumbnail, setThumbnail] = useState<File | null>(null);
   const [message, setMessage] = useState('');
 
   const handleUpload = async (e: React.FormEvent) => {
@@ -18,18 +31,18 @@ const UploadProduct: React.FC = () => {
       setMessage('Please select a file to upload.');
       return;
     }
-    if (!thumbnail) { // サムネイルのチェック
+    if (!thumbnail) {
       setMessage('Please select a thumbnail image.');
       return;
     }
-
     const token = localStorage.getItem('token');
     const formData = new FormData();
     formData.append('title', title);
     formData.append('description', description);
     formData.append('category', category);
+    formData.append('language', language); // アップロード時の言語情報を追加
     formData.append('file', file);
-    formData.append('thumbnail', thumbnail); // サムネイルを追加
+    formData.append('thumbnail', thumbnail);
 
     try {
       const res = await axios.post(`${API_BASE_URL}/product/upload`, formData, {
@@ -49,11 +62,11 @@ const UploadProduct: React.FC = () => {
   };
 
   return (
-    <Container maxWidth="sm">
-      <Typography variant="h4" gutterBottom>
+    <Container maxWidth="sm" sx={{ py: 4 }}>
+      <Typography variant="h4" align="center" gutterBottom>
         Upload Product
       </Typography>
-      <form onSubmit={handleUpload}>
+      <Box component="form" onSubmit={handleUpload} sx={{ mt: 2 }}>
         <TextField
           label="Title"
           variant="outlined"
@@ -74,17 +87,39 @@ const UploadProduct: React.FC = () => {
           onChange={(e) => setDescription(e.target.value)}
           required
         />
-        <FormControl fullWidth margin="normal">
+        <FormControl fullWidth margin="normal" required>
           <InputLabel>Category</InputLabel>
-          <Select value={category} onChange={(e) => setCategory(e.target.value as string)} required>
+          <Select
+            value={category}
+            onChange={(e) => setCategory(e.target.value as string)}
+            label="Category"
+          >
             <MenuItem value="Education">Education</MenuItem>
             <MenuItem value="Business">Business</MenuItem>
             <MenuItem value="Lifestyle">Lifestyle</MenuItem>
             {/* 必要に応じてカテゴリーを追加 */}
           </Select>
         </FormControl>
-        {/* メインファイル選択 */}
-        <Button variant="contained" component="label" fullWidth style={{ marginTop: '20px' }}>
+        <FormControl fullWidth margin="normal" required>
+          <InputLabel>Language</InputLabel>
+          <Select
+            value={language}
+            onChange={(e) => setLanguage(e.target.value as string)}
+            label="Language"
+          >
+            {availableLanguages.map((lang) => (
+              <MenuItem key={lang} value={lang}>
+                {lang.toUpperCase()}
+              </MenuItem>
+            ))}
+          </Select>
+        </FormControl>
+        <Button
+          variant="contained"
+          component="label"
+          fullWidth
+          sx={{ mt: 3 }}
+        >
           Select File
           <input
             type="file"
@@ -96,13 +131,21 @@ const UploadProduct: React.FC = () => {
             }}
           />
         </Button>
-        {file && <Typography variant="body1" style={{ marginTop: '10px' }}>{file.name}</Typography>}
-        {/* サムネイル選択を追加 */}
-        <Button variant="contained" component="label" fullWidth style={{ marginTop: '20px' }}>
+        {file && (
+          <Typography variant="body2" sx={{ mt: 1 }}>
+            {file.name}
+          </Typography>
+        )}
+        <Button
+          variant="contained"
+          component="label"
+          fullWidth
+          sx={{ mt: 3 }}
+        >
           Select Thumbnail
           <input
             type="file"
-            accept="image/*" // 画像のみ選択可能にする
+            accept="image/*"
             hidden
             onChange={(e) => {
               if (e.target.files && e.target.files[0]) {
@@ -111,12 +154,26 @@ const UploadProduct: React.FC = () => {
             }}
           />
         </Button>
-        {thumbnail && <Typography variant="body1" style={{ marginTop: '10px' }}>{thumbnail.name}</Typography>}
-        <Button type="submit" variant="contained" color="primary" fullWidth style={{ marginTop: '20px' }}>
+        {thumbnail && (
+          <Typography variant="body2" sx={{ mt: 1 }}>
+            {thumbnail.name}
+          </Typography>
+        )}
+        <Button
+          type="submit"
+          variant="contained"
+          color="primary"
+          fullWidth
+          sx={{ mt: 3 }}
+        >
           Upload
         </Button>
-      </form>
-      {message && <Typography variant="body1">{message}</Typography>}
+      </Box>
+      {message && (
+        <Typography variant="body1" align="center" sx={{ mt: 3 }}>
+          {message}
+        </Typography>
+      )}
     </Container>
   );
 };

@@ -30,15 +30,15 @@ const AudioPlayerWithAds: React.FC<AudioPlayerWithAdsProps> = ({ audioUrl }) => 
       adsLoader.addEventListener(
         window.google.ima.AdsManagerLoadedEvent.Type.ADS_MANAGER_LOADED,
         (e: GoogleIMA.AdsManagerLoadedEvent) => {
-          console.log("Audio AdsManagerLoadedEvent received:", e);
+          console.log('Audio AdsManagerLoadedEvent received:', e);
           const adsManager = e.getAdsManager(audioRef.current);
           try {
             adsManager.init(1, 1, window.google.ima.ViewMode.NORMAL);
             adsManager.start();
             setAdsLoaded(true);
-            console.log("Audio Ads Manager started successfully.");
+            console.log('Audio Ads Manager started successfully.');
           } catch (adError) {
-            console.error("Audio Ads Manager error:", adError);
+            console.error('Audio Ads Manager error:', adError);
           }
         },
         false
@@ -50,16 +50,16 @@ const AudioPlayerWithAds: React.FC<AudioPlayerWithAdsProps> = ({ audioUrl }) => 
       adsRequest.linearAdSlotWidth = 1;
       adsRequest.linearAdSlotHeight = 1;
 
-      console.log("Audio Ads Requesting URL:", adsRequest.adTagUrl);
+      console.log('Audio Ads Requesting URL:', adsRequest.adTagUrl);
       try {
         adsLoader.requestAds(adsRequest);
         setAdsRequested(true);
-        console.log("Audio ads request sent successfully.");
+        console.log('Audio ads request sent successfully.');
       } catch (error) {
-        console.error("Failed to request audio ads:", error);
+        console.error('Failed to request audio ads:', error);
       }
     } else {
-      console.warn("Google IMA SDK not available for Audio or required elements missing.");
+      console.warn('Google IMA SDK not available for Audio or required elements missing.');
     }
   };
 
@@ -67,12 +67,12 @@ const AudioPlayerWithAds: React.FC<AudioPlayerWithAdsProps> = ({ audioUrl }) => 
     const audioElement = audioRef.current;
     if (!audioElement) return;
     const onPlay = () => {
-      console.log("Audio play event triggered.");
+      console.log('Audio play event triggered.');
       requestAds();
     };
-    audioElement.addEventListener("play", onPlay);
+    audioElement.addEventListener('play', onPlay);
     return () => {
-      audioElement.removeEventListener("play", onPlay);
+      audioElement.removeEventListener('play', onPlay);
     };
   }, [adsRequested]);
 

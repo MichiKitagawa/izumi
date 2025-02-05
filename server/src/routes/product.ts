@@ -15,7 +15,7 @@ dotenv.config();
 
 const router = Router();
 
-// 関数: ファイル名のサニタイズ（不正な文字をアンダースコアに変換）
+// ファイル名のサニタイズ関数
 const sanitizeFilename = (filename: string): string => {
   const baseName = path.basename(filename);
   return baseName.replace(/[^a-zA-Z0-9.\-_]/g, '_');
@@ -32,7 +32,6 @@ if (!AWS_S3_BUCKET_NAME) {
   process.exit(1);
 }
 
-// S3 クライアントの生成
 const s3 = new S3Client({
   credentials: {
     accessKeyId: process.env.AWS_ACCESS_KEY_ID || '',
@@ -41,7 +40,6 @@ const s3 = new S3Client({
   region: AWS_S3_REGION,
 });
 
-// multer の設定（メモリ上に保存）
 const storage = multer.memoryStorage();
 const upload = multer({
   storage,
@@ -76,6 +74,9 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     console.log('Received upload request');
     const { title, description, category } = req.body;
+    // アップロード時の言語をリクエストボディから取得（動的に設定）
+    const language = req.body.language || 'ja';
+
     const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
     const file = files && files['file'] ? files['file'][0] : null;
     const thumbnail = files && files['thumbnail'] ? files['thumbnail'][0] : null;
@@ -94,7 +95,7 @@ router.post(
     }
     try {
       const timestamp = Date.now();
-      // ファイル名をサニタイズして S3 用のキーを作成
+      // ファイル名のサニタイズ
       const sanitizedFileName = sanitizeFilename(file.originalname);
       const fileKey = `${timestamp}_${sanitizedFileName}`;
       const fileParams = {
@@ -107,7 +108,7 @@ router.post(
       await s3.send(fileCommand);
       const fileUrl = `https://${fileParams.Bucket}.s3.${AWS_S3_REGION}.amazonaws.com/${encodeURIComponent(fileParams.Key)}`;
 
-      // サムネイルも同様に S3 にアップロード
+      // サムネイルのアップロード
       const sanitizedThumbnailName = sanitizeFilename(thumbnail.originalname);
       const thumbnailKey = `thumbnails/${timestamp}_${sanitizedThumbnailName}`;
       const thumbnailParams = {
@@ -120,7 +121,7 @@ router.post(
       await s3.send(thumbnailCommand);
       const thumbnailUrl = `https://${thumbnailParams.Bucket}.s3.${AWS_S3_REGION}.amazonaws.com/${encodeURIComponent(thumbnailParams.Key)}`;
 
-      // PDF ファイルの場合、テキストを抽出して HTML に変換
+      // PDFの場合、テキスト抽出して htmlContent に設定
       let htmlContent: string | null = null;
       if (file.mimetype === 'application/pdf') {
         const pdfBuffer = file.buffer;
@@ -129,13 +130,23 @@ router.post(
         htmlContent = `<div>${extractedText.replace(/\n/g, '<br>')}</div>`;
       }
 
-      // ファイル種別の正規化（音声の場合は mp3 とする）
+      // MIME タイプに基づく dataType と fileType の設定
       let normalizedFileType = file.mimetype.split('/')[1];
-      if (file.mimetype === 'audio/mpeg') {
-        normalizedFileType = 'mp3';
+      let normalizedDataType = '';
+      if (file.mimetype.startsWith('video/')) {
+        normalizedDataType = 'video';
+      } else if (file.mimetype.startsWith('audio/')) {
+        normalizedDataType = 'audio';
+        if (file.mimetype === 'audio/mpeg') {
+          normalizedFileType = 'mp3';
+        }
+      } else if (file.mimetype === 'application/pdf') {
+        normalizedDataType = 'text';
+      } else {
+        throw new Error('Unsupported file type.');
       }
 
-      // DB に商品情報を登録
+      // 商品基本情報登録
       const product = await Product.create({
         title,
         description,
@@ -145,21 +156,17 @@ router.post(
         fileType: normalizedFileType,
         fileSize: file.size,
         providerId: req.user.id,
-        htmlContent,
+        htmlContent, // PDFの場合のみ設定
       });
 
-      // DB に商品バージョン情報を登録（オリジナル）
+      // 商品バージョン登録（オリジナル）
       await ProductVersion.create({
         productId: product.id,
-        dataType: 'original',
-        languageCode: 'ja',
-        versionData: {
-          title: product.title,
-          description: product.description,
-          htmlContent: product.htmlContent,
-          fileUrl: product.fileUrl,
-          fileType: product.fileType,
-        },
+        dataType: normalizedDataType, // "video", "audio", "text"
+        languageCode: language,       // クライアントから送信された言語
+        fileUrl: product.fileUrl,
+        fileType: product.fileType,
+        htmlContent: htmlContent,
         isOriginal: true,
       });
 
@@ -171,7 +178,8 @@ router.post(
   }
 );
 
-// ルート: 商材一覧の取得（サムネイルに対する presigned URL 生成）
+
+// 以下のルートはそのまま利用（必要に応じて versionData の参照部分は修正済みの新カラムを使う）
 router.get('/list', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
     const products = await Product.findAll({
@@ -204,7 +212,6 @@ router.get('/list', authenticateToken, async (req: Request, res: Response): Prom
   }
 });
 
-// ルート: フィーチャー商材の取得（最新の商材）
 router.get('/featured', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
     const product = await Product.findOne({
@@ -237,7 +244,6 @@ router.get('/featured', authenticateToken, async (req: Request, res: Response): 
   }
 });
 
-// ルート: ユーザーがアップロードした商材の一覧取得
 router.get('/user-products', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   const userId = req.user?.id;
   if (!userId) {
@@ -275,7 +281,6 @@ router.get('/user-products', authenticateToken, async (req: Request, res: Respon
   }
 });
 
-// ルート: 商品詳細の取得（指定されたIDの商品とそのバージョン情報を取得）
 router.get('/:id',
   authenticateToken,
   authorizeRoles('admin', 'subscriber'),
@@ -313,6 +318,7 @@ router.get('/:id',
 );
 
 // ルート: 商品翻訳の処理（指定言語に翻訳し、DBに保存する）
+// ※ 翻訳されたテキストも "text" として管理する
 router.post('/:id/translate',
   authenticateToken,
   authorizeRoles('provider', 'editor', 'subscriber'),
@@ -334,15 +340,14 @@ router.post('/:id/translate',
         return;
       }
       console.log('Product found:', product);
+      // 既存の翻訳済みバージョンは "text" として管理
       const existingVersion = await ProductVersion.findOne({
-        where: { productId: Number(id), dataType: 'translation', languageCode },
+        where: { productId: Number(id), dataType: 'text', languageCode },
       });
       if (existingVersion) {
-        const versionData = existingVersion.versionData as { title: string; description: string; htmlContent: string | null };
+        // ここは既存データの返却処理（必要に応じて実装）
         res.status(200).json({
-          translatedTitle: versionData.title,
-          translatedDescription: versionData.description,
-          translatedHtmlContent: versionData.htmlContent,
+          translatedHtmlContent: existingVersion.htmlContent,
         });
         return;
       }
@@ -354,33 +359,27 @@ router.post('/:id/translate',
       const translatedHtmlContent = product.htmlContent
         ? await translationService.translate(product.htmlContent, languageCode)
         : null;
-      const versionData = {
-        title: translatedTitle,
-        description: translatedDescription,
-        htmlContent: translatedHtmlContent,
-      };
-      console.log('Saving translated version to product_versions');
+      // 翻訳結果は、タイトルや説明は商品側に保持されているため、ここでは htmlContent のみを対象とする
       const newVersion = await ProductVersion.create({
         productId: Number(id),
-        dataType: 'translation',
+        dataType: 'text', // 翻訳されたテキストは "text" として保存
         languageCode,
-        versionData,
+        fileUrl: null,    // テキスト版には URL は不要
+        fileType: null,
+        htmlContent: translatedHtmlContent,
         isOriginal: false,
       });
       console.log('Translated version saved:', newVersion);
       res.status(201).json({
-        translatedTitle,
-        translatedDescription,
         translatedHtmlContent,
       });
     } catch (error) {
       console.error('Error in translation process:', error);
       res.status(500).json({ message: 'Failed to process translation request.' });
     }
-  }
-);
+  });
 
-// ルート: 商品削除の処理（S3上のファイルも削除）
+
 router.delete(
   '/:id',
   authenticateToken,
@@ -415,7 +414,6 @@ router.delete(
   }
 );
 
-// ルート: 動画再生用 presigned URL 生成エンドポイント
 router.get('/stream/:id', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   const { id } = req.params;
   try {

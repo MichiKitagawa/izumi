@@ -2,21 +2,25 @@
 import React, { useState, useEffect, useContext } from 'react';
 import axios from 'axios';
 import { useParams, useNavigate } from 'react-router-dom';
-import { Container, Typography, Button, CircularProgress } from '@mui/material';
+import {
+  Container,
+  Typography,
+  Button,
+  CircularProgress,
+  Tabs,
+  Tab,
+  Box,
+} from '@mui/material';
 import { API_BASE_URL } from '../api';
 
-// 型定義: 商品のバージョン情報
+// 型定義: 商品のバージョン情報（新しい構造）
 interface ProductVersion {
   id: number;
-  dataType: string; // 'original', 'translation', 'converted-audio', 'converted-video'
+  dataType: string;         // "video", "audio", "text"
   languageCode: string;
-  versionData: {
-    fileUrl?: string;
-    fileType?: string;
-    title?: string;
-    description?: string;
-    htmlContent?: string | null;
-  };
+  fileUrl: string | null;    // 動画・音声の場合の URL
+  fileType: string | null;   // "mp4", "mp3", "pdf"
+  htmlContent: string | null; // テキストの場合の HTML
   isOriginal: boolean;
 }
 
@@ -29,47 +33,49 @@ interface Product {
   fileUrl: string;
   thumbnailUrl: string;
   htmlContent: string | null;
-  fileType: string; // 'pdf', 'mp4', 'mp3'
+  fileType: string;
   versions?: ProductVersion[];
 }
 
-// サブスクリプション状態管理のためのコンテキストをインポート
+// サブスクリプション状態管理のためのコンテキスト
 import { SubscriptionContext } from '../context/SubscriptionContext';
 
-// 広告付きプレイヤーコンポーネントのインポート（動画、音声、PDF 各種）
+// 広告付きプレイヤーコンポーネントのインポート
 import VideoPlayerWithAds from '../components/VideoPlayerWithAds';
 import AudioPlayerWithAds from '../components/AudioPlayerWithAds';
 import PdfViewerWithAds from '../components/PdfViewerWithAds';
 
+// 利用可能な主要言語（例として7言語）
+const availableLanguages = ['ja', 'en', 'es', 'fr', 'de', 'it', 'zh'];
+
 const ProductDetail: React.FC = () => {
-  // URL パラメータから商品IDを取得
   const { productId } = useParams<{ productId: string }>();
   const navigate = useNavigate();
 
-  // 商品情報、翻訳結果、読み込み状態などを状態管理
   const [product, setProduct] = useState<Product | null>(null);
-  const [translatedTitle, setTranslatedTitle] = useState<string>('');
-  const [translatedDescription, setTranslatedDescription] = useState<string>('');
-  const [translatedHtmlContent, setTranslatedHtmlContent] = useState<string>('');
   const [loading, setLoading] = useState<boolean>(false);
   const [message, setMessage] = useState('');
-  const [downloading, setDownloading] = useState<boolean>(false);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
 
-  // サブスクリプション状態（プラン情報等）をグローバルコンテキストから取得
+  // 動画／音声用 presigned URL 状態
+  const [videoStreamUrl, setVideoStreamUrl] = useState<string | null>(null);
+  const [audioStreamUrl, setAudioStreamUrl] = useState<string | null>(null);
+
+  // タブ選択状態
+  const [selectedMediaType, setSelectedMediaType] = useState<string>('video');
+  const [selectedLanguage, setSelectedLanguage] = useState<string>('ja');
+
   const { subscription, loading: subscriptionLoading } = useContext(SubscriptionContext);
 
-  // サブスクリプション情報がロード完了しており、かつ存在しない場合は購読ページへリダイレクト
   useEffect(() => {
     if (!subscriptionLoading && !subscription) {
       navigate('/subscribe', { replace: true });
     }
   }, [subscription, subscriptionLoading, navigate]);
 
-  // 商品情報を API から取得する処理
   useEffect(() => {
-    if (subscriptionLoading) return; // サブスクリプション状態が読み込まれるまで待つ
+    if (subscriptionLoading) return;
     const fetchProduct = async () => {
+      setLoading(true);
       try {
         const res = await axios.get(`${API_BASE_URL}/product/${productId}`, {
           headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
@@ -78,162 +84,131 @@ const ProductDetail: React.FC = () => {
       } catch (error) {
         setMessage('商品情報の取得に失敗しました。');
         console.error('Error fetching product:', error);
+      } finally {
+        setLoading(false);
       }
     };
     fetchProduct();
   }, [productId, subscriptionLoading]);
 
-  // 商品が動画の場合、動画再生用の presigned URL を取得する処理
+  // 動画の場合：選択言語に対応する "video" バージョンを取得（converted も original も対象）
   useEffect(() => {
-    const fetchVideoUrl = async () => {
-      try {
-        if (product && product.fileType === 'mp4') {
-          const res = await axios.get(`${API_BASE_URL}/product/stream/${product.id}`, {
-            headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-          });
-          setVideoUrl(res.data.presignedUrl);
+    const fetchVideoStreamUrl = async () => {
+      if (product && selectedMediaType === 'video') {
+        const videoVersion = product.versions?.find(
+          (v) =>
+            v.dataType === 'video' && v.languageCode === selectedLanguage
+        );
+        if (videoVersion && videoVersion.fileUrl) {
+          try {
+            const res = await axios.get(
+              `${API_BASE_URL}/download/presigned-url/${videoVersion.id}`,
+              { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+            );
+            setVideoStreamUrl(res.data.url);
+          } catch (error) {
+            console.error('Error fetching video presigned URL:', error);
+            setVideoStreamUrl(null);
+          }
+        } else {
+          setVideoStreamUrl(null);
         }
-      } catch (error) {
-        console.error('Error fetching video presigned URL:', error);
       }
     };
-    fetchVideoUrl();
-  }, [product]);
+    fetchVideoStreamUrl();
+  }, [product, selectedMediaType, selectedLanguage]);
 
-  // 翻訳処理: 指定の言語コードに基づいてタイトル・説明・HTMLコンテンツを翻訳
-  const handleTranslate = async (languageCode: string) => {
-    if (!product) return;
-    setLoading(true);
-    setMessage('');
-    try {
-      const res = await axios.post(
-        `${API_BASE_URL}/product/${product.id}/translate`,
-        { languageCode },
-        { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
-      );
-      setTranslatedTitle(res.data.translatedTitle);
-      setTranslatedDescription(res.data.translatedDescription);
-      setTranslatedHtmlContent(res.data.translatedHtmlContent);
-    } catch (error) {
-      setMessage('翻訳に失敗しました。');
-      console.error('Translation error:', error);
-    } finally {
-      setLoading(false);
-    }
+  // 音声の場合：選択言語に対応する "audio" バージョンを取得
+  useEffect(() => {
+    const fetchAudioStreamUrl = async () => {
+      if (product && selectedMediaType === 'audio') {
+        const audioVersion = product.versions?.find(
+          (v) =>
+            v.dataType === 'audio' && v.languageCode === selectedLanguage
+        );
+        if (audioVersion && audioVersion.fileUrl) {
+          try {
+            const res = await axios.get(
+              `${API_BASE_URL}/download/presigned-url/${audioVersion.id}`,
+              { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+            );
+            setAudioStreamUrl(res.data.url);
+          } catch (error) {
+            console.error('Error fetching audio presigned URL:', error);
+            setAudioStreamUrl(null);
+          }
+        } else {
+          setAudioStreamUrl(null);
+        }
+      }
+    };
+    fetchAudioStreamUrl();
+  }, [product, selectedMediaType, selectedLanguage]);
+
+  const handleMediaTypeChange = (_: React.SyntheticEvent, newValue: string) => {
+    setSelectedMediaType(newValue);
+    setVideoStreamUrl(null);
+    setAudioStreamUrl(null);
   };
 
-  // ダウンロード処理: オリジナルバージョンのダウンロード用 presigned URL を取得してダウンロードを開始
-  const handleDownload = async () => {
-    if (!product) return;
-    setDownloading(true);
-    setMessage('');
-    try {
-      const originalVersion = product.versions?.find(v => v.isOriginal);
-      if (!originalVersion) throw new Error('オリジナルバージョンが見つかりません。');
-      const versionId = originalVersion.id;
-      const res = await axios.get(`${API_BASE_URL}/download/presigned-url/${versionId}`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem('token')}` },
-      });
-      const { url } = res.data;
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = product.title;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-      setMessage('ダウンロードが開始されました。');
-    } catch (error) {
-      setMessage('ダウンロードに失敗しました。');
-      console.error('Download error:', error);
-    } finally {
-      setDownloading(false);
-    }
+  const handleLanguageChange = (_: React.SyntheticEvent, newValue: string) => {
+    setSelectedLanguage(newValue);
+    setVideoStreamUrl(null);
+    setAudioStreamUrl(null);
   };
 
-  /**
-   * renderMediaContent:
-   * - 商品情報とそのファイルタイプに基づいて、表示すべきコンテンツを決定する。
-   * - サブスクプランが 'Basic' の場合は、広告付きプレイヤーコンポーネント（VideoPlayerWithAds, AudioPlayerWithAds, PdfViewerWithAds）を使用し、
-   *   Basic 以外の場合は従来の video/audio タグや HTML 表示を使用する。
-   */
   const renderMediaContent = () => {
     if (!product) return null;
-
-    // 変換済みバージョン（翻訳など）がある場合は、そちらを優先的に利用
-    const convertedVersion = product.versions?.find(v =>
-      v.dataType === 'converted-audio' || v.dataType === 'converted-video'
-    );
     const useAdPlayer = subscription && subscription.plan === 'Basic';
 
-    if (convertedVersion && convertedVersion.versionData && convertedVersion.versionData.fileUrl) {
-      const convertedUrl = convertedVersion.versionData.fileUrl;
-      if (convertedVersion.dataType === 'converted-audio') {
-        return useAdPlayer ? (
-          <AudioPlayerWithAds audioUrl={convertedUrl} />
-        ) : (
-          <audio controls style={{ width: '100%' }}>
-            <source src={convertedUrl} type="audio/mpeg" />
-            お使いのブラウザはオーディオタグに対応していません。
-          </audio>
-        );
+    if (selectedMediaType === 'video') {
+      if (!videoStreamUrl) {
+        return <Typography>動画が見つかりません。</Typography>;
       }
-      if (convertedVersion.dataType === 'converted-video') {
-        return useAdPlayer ? (
-          <VideoPlayerWithAds videoUrl={convertedUrl} />
-        ) : (
-          <video controls style={{ width: '100%' }}>
-            <source src={convertedUrl} type="video/mp4" />
-            お使いのブラウザは動画タグに対応していません。
-          </video>
-        );
-      }
+      return useAdPlayer ? (
+        <VideoPlayerWithAds videoUrl={videoStreamUrl} />
+      ) : (
+        <video controls style={{ width: '100%' }}>
+          <source src={videoStreamUrl} type="video/mp4" />
+          お使いのブラウザは動画タグに対応していません。
+        </video>
+      );
     }
 
-    // 商品ファイルの種類に応じた処理
-    if (product.fileType === 'mp3') {
+    if (selectedMediaType === 'audio') {
+      if (!audioStreamUrl) {
+        return <Typography>音声が見つかりません。</Typography>;
+      }
       return useAdPlayer ? (
-        <AudioPlayerWithAds audioUrl={product.fileUrl} />
+        <AudioPlayerWithAds audioUrl={audioStreamUrl} />
       ) : (
         <audio controls style={{ width: '100%' }}>
-          <source src={product.fileUrl} type="audio/mpeg" />
+          <source src={audioStreamUrl} type="audio/mpeg" />
           お使いのブラウザはオーディオタグに対応していません。
         </audio>
       );
     }
-    if (product.fileType === 'mp4') {
-      return useAdPlayer ? (
-        videoUrl ? (
-          <VideoPlayerWithAds videoUrl={videoUrl} />
-        ) : (
-          <div>動画を読み込み中...</div>
-        )
-      ) : (
-        videoUrl ? (
-          <video controls style={{ width: '100%' }}>
-            <source src={videoUrl} type="video/mp4" />
-            お使いのブラウザは動画タグに対応していません。
-          </video>
-        ) : (
-          <div>動画を読み込み中...</div>
-        )
-      );
-    }
-    // PDFなどの場合
-    if (product.fileType === 'pdf') {
-      return useAdPlayer ? (
-        <PdfViewerWithAds htmlContent={translatedHtmlContent || product.htmlContent || ''} />
-      ) : (
-        <div dangerouslySetInnerHTML={{ __html: translatedHtmlContent || product.htmlContent || '' }} />
-      );
-    }
 
-    // その他の場合、従来のHTML表示
-    return (
-      <div dangerouslySetInnerHTML={{ __html: translatedHtmlContent || product.htmlContent || '' }} />
-    );
+    if (selectedMediaType === 'text') {
+      // テキストの場合は、該当する "text" バージョンのみを表示
+      const textVersion = product.versions?.find(
+        (v) => v.dataType === 'text' && v.languageCode === selectedLanguage
+      );
+      const htmlContent = textVersion?.htmlContent || '';
+      if (!htmlContent) return <Typography>テキストが見つかりません。</Typography>;
+      // PDFの場合（アップロード時が PDF の場合）は PdfViewerWithAds を利用
+      if (product.fileType === 'pdf') {
+        return useAdPlayer ? (
+          <PdfViewerWithAds htmlContent={htmlContent} />
+        ) : (
+          <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
+        );
+      }
+      return <div dangerouslySetInnerHTML={{ __html: htmlContent }} />;
+    }
+    return null;
   };
 
-  // 商品情報またはサブスクリプション情報のロード中はローディング表示
   if (subscriptionLoading || !product) {
     return (
       <Container>
@@ -245,7 +220,7 @@ const ProductDetail: React.FC = () => {
   return (
     <Container>
       <Typography variant="h4" gutterBottom>
-        {translatedTitle || product.title}
+        {product.title}
       </Typography>
       {product.thumbnailUrl && (
         <img
@@ -255,36 +230,63 @@ const ProductDetail: React.FC = () => {
         />
       )}
       <Typography variant="body1" gutterBottom>
-        {translatedDescription || product.description}
+        {product.description}
       </Typography>
-      <div style={{ marginTop: '20px' }}>{renderMediaContent()}</div>
-      <div style={{ marginTop: '20px' }}>
+
+      {/* 商材型タブ */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 2 }}>
+        <Tabs value={selectedMediaType} onChange={handleMediaTypeChange} variant="fullWidth">
+          <Tab value="video" label="動画" />
+          <Tab value="audio" label="音声" />
+          <Tab value="text" label="テキスト" />
+        </Tabs>
+      </Box>
+
+      {/* 言語タブ */}
+      <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 1 }}>
+        <Tabs value={selectedLanguage} onChange={handleLanguageChange} variant="scrollable" scrollButtons="auto">
+          {availableLanguages.map((lang) => (
+            <Tab key={lang} value={lang} label={lang.toUpperCase()} />
+          ))}
+        </Tabs>
+      </Box>
+
+      {/* メインコンテンツ表示エリア */}
+      <Box sx={{ mt: 2 }}>{renderMediaContent()}</Box>
+
+      {/* ダウンロードボタン */}
+      <Box sx={{ mt: 2 }}>
         <Button
           variant="contained"
-          color="primary"
-          onClick={() => handleTranslate('en')}
-          disabled={loading}
-          style={{ marginRight: '10px' }}
+          color="success"
+          onClick={async () => {
+            try {
+              const originalVersion = product.versions?.find((v) => v.isOriginal);
+              if (!originalVersion) throw new Error('オリジナルバージョンが見つかりません。');
+              const res = await axios.get(
+                `${API_BASE_URL}/download/presigned-url/${originalVersion.id}`,
+                { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+              );
+              const { url } = res.data;
+              const link = document.createElement('a');
+              link.href = url;
+              link.download = product.title;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+            } catch (error) {
+              setMessage('ダウンロードに失敗しました。');
+              console.error('Download error:', error);
+            }
+          }}
         >
-          英語に翻訳
-        </Button>
-        <Button
-          variant="contained"
-          color="secondary"
-          onClick={() => handleTranslate('ja')}
-          disabled={loading}
-        >
-          日本語に戻す
-        </Button>
-      </div>
-      <div style={{ marginTop: '20px' }}>
-        <Button variant="contained" color="success" onClick={handleDownload} disabled={downloading}>
           ダウンロード
         </Button>
-      </div>
-      {(loading || downloading) && <CircularProgress style={{ marginTop: '10px' }} />}
+      </Box>
+
+      {loading && <CircularProgress sx={{ mt: 2 }} />}
       {message && (
-        <Typography variant="body1" style={{ marginTop: '10px', color: 'green' }}>
+        <Typography variant="body1" sx={{ mt: 2, color: 'green' }}>
           {message}
         </Typography>
       )}
