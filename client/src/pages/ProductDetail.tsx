@@ -12,19 +12,23 @@ import {
   Box,
 } from '@mui/material';
 import { API_BASE_URL } from '../api';
+import AIConvertModal from '../components/AIConvertModal';
 
-// 型定義: 商品のバージョン情報（新しい構造）
+// 既存の SubscriptionContext を正しくインポートする
+import { SubscriptionContext } from '../context/SubscriptionContext';
+
+// 型定義：ProductVersion
 interface ProductVersion {
   id: number;
-  dataType: string;         // "video", "audio", "text"
+  dataType: 'video' | 'audio' | 'text';
   languageCode: string;
-  fileUrl: string | null;    // 動画・音声の場合の URL
-  fileType: string | null;   // "mp4", "mp3", "pdf"
-  htmlContent: string | null; // テキストの場合の HTML
+  fileUrl: string | null;
+  fileType: string | null;
+  htmlContent: string | null;
   isOriginal: boolean;
 }
 
-// 型定義: 商品そのものの情報
+// 型定義：Product
 interface Product {
   id: number;
   title: string;
@@ -37,16 +41,39 @@ interface Product {
   versions?: ProductVersion[];
 }
 
-// サブスクリプション状態管理のためのコンテキスト
-import { SubscriptionContext } from '../context/SubscriptionContext';
+// ダミーのプレイヤーコンポーネント（各自実装済みのものを利用）
+const VideoPlayerWithAds: React.FC<{ videoUrl: string }> = ({ videoUrl }) => (
+  <video controls style={{ width: '100%' }}>
+    <source src={videoUrl} type="video/mp4" />
+    ブラウザが動画タグに対応していません。
+  </video>
+);
+const AudioPlayerWithAds: React.FC<{ audioUrl: string }> = ({ audioUrl }) => (
+  <audio controls style={{ width: '100%' }}>
+    <source src={audioUrl} type="audio/mpeg" />
+    ブラウザがオーディオタグに対応していません。
+  </audio>
+);
 
-// 広告付きプレイヤーコンポーネントのインポート
-import VideoPlayerWithAds from '../components/VideoPlayerWithAds';
-import AudioPlayerWithAds from '../components/AudioPlayerWithAds';
-import PdfViewerWithAds from '../components/PdfViewerWithAds';
+// PDF表示コンポーネント（iframe を利用）
+const PdfViewerWithAds: React.FC<{ htmlContentUrl: string }> = ({ htmlContentUrl }) => (
+  <iframe
+    src={htmlContentUrl}
+    style={{ width: '100%', height: '600px', border: 'none' }}
+    title="PDF Converted HTML"
+  />
+);
 
-// 利用可能な主要言語（例として7言語）
-const availableLanguages = ['ja', 'en', 'es', 'fr', 'de', 'it', 'zh'];
+// 利用可能な主要言語
+const availableLanguages = [
+  { value: 'ja', label: '日本語' },
+  { value: 'en', label: '英語' },
+  { value: 'es', label: 'スペイン語' },
+  { value: 'fr', label: 'フランス語' },
+  { value: 'de', label: 'ドイツ語' },
+  { value: 'it', label: 'イタリア語' },
+  { value: 'zh', label: '中国語' },
+];
 
 const ProductDetail: React.FC = () => {
   const { productId } = useParams<{ productId: string }>();
@@ -54,15 +81,14 @@ const ProductDetail: React.FC = () => {
 
   const [product, setProduct] = useState<Product | null>(null);
   const [loading, setLoading] = useState<boolean>(false);
-  const [message, setMessage] = useState('');
-
-  // 動画／音声用 presigned URL 状態
+  const [message, setMessage] = useState<string>('');
   const [videoStreamUrl, setVideoStreamUrl] = useState<string | null>(null);
   const [audioStreamUrl, setAudioStreamUrl] = useState<string | null>(null);
-
-  // タブ選択状態
-  const [selectedMediaType, setSelectedMediaType] = useState<string>('video');
+  // テキスト（HTML）のプレサインドURL
+  const [textStreamUrl, setTextStreamUrl] = useState<string | null>(null);
+  const [selectedMediaType, setSelectedMediaType] = useState<'video' | 'audio' | 'text'>('video');
   const [selectedLanguage, setSelectedLanguage] = useState<string>('ja');
+  const [aiModalOpen, setAiModalOpen] = useState<boolean>(false);
 
   const { subscription, loading: subscriptionLoading } = useContext(SubscriptionContext);
 
@@ -91,13 +117,12 @@ const ProductDetail: React.FC = () => {
     fetchProduct();
   }, [productId, subscriptionLoading]);
 
-  // 動画の場合：選択言語に対応する "video" バージョンを取得（converted も original も対象）
+  // 動画の場合のプレサインドURL取得
   useEffect(() => {
     const fetchVideoStreamUrl = async () => {
       if (product && selectedMediaType === 'video') {
         const videoVersion = product.versions?.find(
-          (v) =>
-            v.dataType === 'video' && v.languageCode === selectedLanguage
+          (v: ProductVersion) => v.dataType === 'video' && v.languageCode === selectedLanguage
         );
         if (videoVersion && videoVersion.fileUrl) {
           try {
@@ -118,13 +143,12 @@ const ProductDetail: React.FC = () => {
     fetchVideoStreamUrl();
   }, [product, selectedMediaType, selectedLanguage]);
 
-  // 音声の場合：選択言語に対応する "audio" バージョンを取得
+  // 音声の場合のプレサインドURL取得
   useEffect(() => {
     const fetchAudioStreamUrl = async () => {
       if (product && selectedMediaType === 'audio') {
         const audioVersion = product.versions?.find(
-          (v) =>
-            v.dataType === 'audio' && v.languageCode === selectedLanguage
+          (v: ProductVersion) => v.dataType === 'audio' && v.languageCode === selectedLanguage
         );
         if (audioVersion && audioVersion.fileUrl) {
           try {
@@ -145,16 +169,54 @@ const ProductDetail: React.FC = () => {
     fetchAudioStreamUrl();
   }, [product, selectedMediaType, selectedLanguage]);
 
-  const handleMediaTypeChange = (_: React.SyntheticEvent, newValue: string) => {
+  // テキスト（HTML、PDF変換後）の場合のプレサインドURL取得
+  useEffect(() => {
+    const fetchTextStreamUrl = async () => {
+      if (product && selectedMediaType === 'text' && product.fileType === 'pdf') {
+        const textVersion = product.versions?.find(
+          (v: ProductVersion) => v.dataType === 'text' && v.languageCode === selectedLanguage
+        );
+        if (textVersion && textVersion.htmlContent) {
+          try {
+            const res = await axios.get(
+              `${API_BASE_URL}/download/presigned-url/${textVersion.id}`,
+              { headers: { Authorization: `Bearer ${localStorage.getItem('token')}` } }
+            );
+            setTextStreamUrl(res.data.url);
+          } catch (error) {
+            console.error('Error fetching text (HTML) presigned URL:', error);
+            setTextStreamUrl(null);
+          }
+        } else {
+          setTextStreamUrl(null);
+        }
+      }
+    };
+    fetchTextStreamUrl();
+  }, [product, selectedMediaType, selectedLanguage]);
+
+  const handleMediaTypeChange = (_: React.SyntheticEvent, newValue: 'video' | 'audio' | 'text') => {
     setSelectedMediaType(newValue);
     setVideoStreamUrl(null);
     setAudioStreamUrl(null);
+    setTextStreamUrl(null);
   };
 
   const handleLanguageChange = (_: React.SyntheticEvent, newValue: string) => {
     setSelectedLanguage(newValue);
     setVideoStreamUrl(null);
     setAudioStreamUrl(null);
+    setTextStreamUrl(null);
+  };
+
+  const handleConversionComplete = (convertedResult: unknown) => {
+    setProduct((prev: Product | null): Product | null => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        versions: [...(prev.versions || []), convertedResult as ProductVersion],
+      };
+    });
   };
 
   const renderMediaContent = () => {
@@ -190,20 +252,24 @@ const ProductDetail: React.FC = () => {
     }
 
     if (selectedMediaType === 'text') {
-      // テキストの場合は、該当する "text" バージョンのみを表示
+      if (product.fileType === 'pdf') {
+        if (!textStreamUrl) return <Typography>テキスト(HTML)が見つかりません。</Typography>;
+        return useAdPlayer ? (
+          <PdfViewerWithAds htmlContentUrl={textStreamUrl} />
+        ) : (
+          <iframe
+            src={textStreamUrl}
+            style={{ width: '100%', height: '600px', border: 'none' }}
+            title="PDF Converted HTML"
+          />
+        );
+      }
+      // PDF以外の場合は、既存のhtmlContentを直接レンダリング
       const textVersion = product.versions?.find(
-        (v) => v.dataType === 'text' && v.languageCode === selectedLanguage
+        (v: ProductVersion) => v.dataType === 'text' && v.languageCode === selectedLanguage
       );
       const htmlContent = textVersion?.htmlContent || '';
       if (!htmlContent) return <Typography>テキストが見つかりません。</Typography>;
-      // PDFの場合（アップロード時が PDF の場合）は PdfViewerWithAds を利用
-      if (product.fileType === 'pdf') {
-        return useAdPlayer ? (
-          <PdfViewerWithAds htmlContent={htmlContent} />
-        ) : (
-          <div dangerouslySetInnerHTML={{ __html: htmlContent }} />
-        );
-      }
       return <div dangerouslySetInnerHTML={{ __html: htmlContent }} />;
     }
     return null;
@@ -233,6 +299,21 @@ const ProductDetail: React.FC = () => {
         {product.description}
       </Typography>
 
+      {/* AI機能ボタン */}
+      <Box sx={{ mt: 2 }}>
+        <Button variant="contained" color="primary" onClick={() => setAiModalOpen(true)}>
+          AI機能
+        </Button>
+      </Box>
+
+      {/* AI変換モーダル */}
+      <AIConvertModal
+        open={aiModalOpen}
+        onClose={() => setAiModalOpen(false)}
+        productId={productId!}
+        onConversionComplete={handleConversionComplete}
+      />
+
       {/* 商材型タブ */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 2 }}>
         <Tabs value={selectedMediaType} onChange={handleMediaTypeChange} variant="fullWidth">
@@ -244,9 +325,14 @@ const ProductDetail: React.FC = () => {
 
       {/* 言語タブ */}
       <Box sx={{ borderBottom: 1, borderColor: 'divider', mt: 1 }}>
-        <Tabs value={selectedLanguage} onChange={handleLanguageChange} variant="scrollable" scrollButtons="auto">
+        <Tabs
+          value={selectedLanguage}
+          onChange={handleLanguageChange}
+          variant="scrollable"
+          scrollButtons="auto"
+        >
           {availableLanguages.map((lang) => (
-            <Tab key={lang} value={lang} label={lang.toUpperCase()} />
+            <Tab key={lang.value} value={lang.value} label={lang.label} />
           ))}
         </Tabs>
       </Box>
@@ -254,14 +340,14 @@ const ProductDetail: React.FC = () => {
       {/* メインコンテンツ表示エリア */}
       <Box sx={{ mt: 2 }}>{renderMediaContent()}</Box>
 
-      {/* ダウンロードボタン */}
+      {/* ダウンロードボタン (既存コード) */}
       <Box sx={{ mt: 2 }}>
         <Button
           variant="contained"
           color="success"
           onClick={async () => {
             try {
-              const originalVersion = product.versions?.find((v) => v.isOriginal);
+              const originalVersion = product.versions?.find((v: ProductVersion) => v.isOriginal);
               if (!originalVersion) throw new Error('オリジナルバージョンが見つかりません。');
               const res = await axios.get(
                 `${API_BASE_URL}/download/presigned-url/${originalVersion.id}`,

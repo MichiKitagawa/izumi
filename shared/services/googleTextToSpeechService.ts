@@ -1,5 +1,5 @@
 // shared/services/googleTextToSpeechService.ts
-import { TextToSpeechClient, protos } from '@google-cloud/text-to-speech'; // 修正
+import { TextToSpeechClient, protos } from '@google-cloud/text-to-speech';
 import { TextToSpeechService } from './aiService';
 
 class GoogleTextToSpeechService implements TextToSpeechService {
@@ -9,11 +9,11 @@ class GoogleTextToSpeechService implements TextToSpeechService {
     this.client = new TextToSpeechClient();
   }
 
-  async synthesize(text: string): Promise<Buffer> {
-    const request: protos.google.cloud.texttospeech.v1.ISynthesizeSpeechRequest = { // 修正
+  async synthesize(text: string, languageCode: string = 'ja-JP'): Promise<Buffer> {
+    const request: protos.google.cloud.texttospeech.v1.ISynthesizeSpeechRequest = {
       input: { text },
-      voice: { languageCode: 'ja-JP', ssmlGender: 'NEUTRAL' },
-      audioConfig: { audioEncoding: protos.google.cloud.texttospeech.v1.AudioEncoding.MP3 }, // 修正
+      voice: { languageCode, ssmlGender: 'NEUTRAL' },
+      audioConfig: { audioEncoding: protos.google.cloud.texttospeech.v1.AudioEncoding.MP3 },
     };
 
     const [response] = await this.client.synthesizeSpeech(request);

@@ -9,7 +9,6 @@ import Profile from './pages/Profile';
 import Admin from './pages/Admin';
 import UploadProduct from './pages/UploadProduct';
 import Subscription from './pages/Subscription';
-import AIProcessing from './pages/AIProcessing';
 import RevenueReport from './pages/RevenueReport';
 import ProductDetail from './pages/ProductDetail';
 import TermsOfService from './pages/TermsOfService';
@@ -89,7 +88,6 @@ root.render(
               <Route path="admin" element={<Admin />} />
               <Route path="upload" element={<UploadProduct />} />
               <Route path="subscription" element={<Subscription />} />
-              <Route path="ai" element={<AIProcessing />} />
               <Route path="revenue-report" element={<RevenueReport />} />
 
               {/* 商材詳細ページ (サブスク状態チェックは ProductDetail 内で実施) */}

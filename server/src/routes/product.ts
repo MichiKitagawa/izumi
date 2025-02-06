@@ -1,4 +1,4 @@
-// src/routes/product.ts
+// server/src/routes/product.ts
 import { Router, Request, Response } from 'express';
 import multer from 'multer';
 import { S3Client, PutObjectCommand, DeleteObjectCommand, GetObjectCommand } from '@aws-sdk/client-s3';
@@ -7,9 +7,14 @@ import { Product, ProductVersion } from '../models';
 import dotenv from 'dotenv';
 import * as path from 'path';
 import { getSignedUrl } from '@aws-sdk/s3-request-presigner';
-import pdfParse from 'pdf-parse';
-import AIFactory from '../../../shared/services/aiFactory';
 import checkSubscription from '../middleware/checkSubscription';
+
+import { promisify } from 'util';
+import { execFile } from 'child_process';
+import { promises as fs } from 'fs';
+import os from 'os';
+
+import { convertPdfToHtml } from '../utils/convertPdfToHtml';
 
 dotenv.config();
 
@@ -65,7 +70,7 @@ const upload = multer({
   },
 });
 
-// ルート: 商品アップロード（ファイルとサムネイルのアップロード、PDF の解析、DB 登録）
+// ルート: 商品アップロード（ファイルとサムネイルのアップロード、PDF の変換、DB 登録）
 router.post(
   '/upload',
   authenticateToken,
@@ -74,7 +79,7 @@ router.post(
   async (req: Request, res: Response): Promise<void> => {
     console.log('Received upload request');
     const { title, description, category } = req.body;
-    // アップロード時の言語をリクエストボディから取得（動的に設定）
+    // アップロード時の言語（デフォルトはja）
     const language = req.body.language || 'ja';
 
     const files = req.files as { [fieldname: string]: Express.Multer.File[] } | undefined;
@@ -95,20 +100,48 @@ router.post(
     }
     try {
       const timestamp = Date.now();
-      // ファイル名のサニタイズ
       const sanitizedFileName = sanitizeFilename(file.originalname);
-      const fileKey = `${timestamp}_${sanitizedFileName}`;
-      const fileParams = {
-        Bucket: AWS_S3_BUCKET_NAME,
-        Key: fileKey,
-        Body: file.buffer,
-        ContentType: file.mimetype,
-      };
-      const fileCommand = new PutObjectCommand(fileParams);
-      await s3.send(fileCommand);
-      const fileUrl = `https://${fileParams.Bucket}.s3.${AWS_S3_REGION}.amazonaws.com/${encodeURIComponent(fileParams.Key)}`;
+      let fileUrl: string = '';
+      let htmlContent: string | null = null;
 
-      // サムネイルのアップロード
+      if (file.mimetype === 'application/pdf') {
+        // PDFの場合は、オリジナルPDFは S3 にアップロードせず、直接 HTML に変換してアップロードする
+        const tmpDir = os.tmpdir();
+        // 変換後の HTML 一時ファイルパスを指定
+        const htmlTempPath = path.join(tmpDir, `${timestamp}_converted.html`);
+        // convertPdfToHtml 関数を呼び出して変換を実施
+        const convertedHtml = await convertPdfToHtml(file.buffer, htmlTempPath);
+        
+        // 変換後の HTML を Buffer 化して S3 にアップロード
+        const htmlBuffer = Buffer.from(convertedHtml, 'utf8');
+        const htmlKey = `converted_html/${timestamp}_${sanitizedFileName.split('.')[0]}_converted.html`;
+        const htmlParams = {
+          Bucket: AWS_S3_BUCKET_NAME,
+          Key: htmlKey,
+          Body: htmlBuffer,
+          ContentType: 'text/html',
+        };
+        const htmlCommand = new PutObjectCommand(htmlParams);
+        await s3.send(htmlCommand);
+        // 変換後の HTML の URL を生成
+        fileUrl = `https://${htmlParams.Bucket}.s3.${AWS_S3_REGION}.amazonaws.com/${encodeURIComponent(htmlParams.Key)}`;
+        // 保存する値として HTML コンテンツの URL を設定
+        htmlContent = fileUrl;
+      } else {
+        // 動画や音声の場合は、従来通りオリジナルファイルを S3 にアップロードする
+        const fileKey = `${timestamp}_${sanitizedFileName}`;
+        const fileParams = {
+          Bucket: AWS_S3_BUCKET_NAME,
+          Key: fileKey,
+          Body: file.buffer,
+          ContentType: file.mimetype,
+        };
+        const fileCommand = new PutObjectCommand(fileParams);
+        await s3.send(fileCommand);
+        fileUrl = `https://${fileParams.Bucket}.s3.${AWS_S3_REGION}.amazonaws.com/${encodeURIComponent(fileParams.Key)}`;
+      }
+
+      // サムネイルのアップロード（共通処理）
       const sanitizedThumbnailName = sanitizeFilename(thumbnail.originalname);
       const thumbnailKey = `thumbnails/${timestamp}_${sanitizedThumbnailName}`;
       const thumbnailParams = {
@@ -120,15 +153,6 @@ router.post(
       const thumbnailCommand = new PutObjectCommand(thumbnailParams);
       await s3.send(thumbnailCommand);
       const thumbnailUrl = `https://${thumbnailParams.Bucket}.s3.${AWS_S3_REGION}.amazonaws.com/${encodeURIComponent(thumbnailParams.Key)}`;
-
-      // PDFの場合、テキスト抽出して htmlContent に設定
-      let htmlContent: string | null = null;
-      if (file.mimetype === 'application/pdf') {
-        const pdfBuffer = file.buffer;
-        const parsedData = await pdfParse(pdfBuffer);
-        const extractedText = parsedData.text;
-        htmlContent = `<div>${extractedText.replace(/\n/g, '<br>')}</div>`;
-      }
 
       // MIME タイプに基づく dataType と fileType の設定
       let normalizedFileType = file.mimetype.split('/')[1];
@@ -146,7 +170,7 @@ router.post(
         throw new Error('Unsupported file type.');
       }
 
-      // 商品基本情報登録
+      // 商品基本情報登録（PDFの場合は fileUrl に変換後 HTML の URL が登録される）
       const product = await Product.create({
         title,
         description,
@@ -156,7 +180,7 @@ router.post(
         fileType: normalizedFileType,
         fileSize: file.size,
         providerId: req.user.id,
-        htmlContent, // PDFの場合のみ設定
+        htmlContent, // PDFの場合は変換後 HTML の URL
       });
 
       // 商品バージョン登録（オリジナル）
@@ -166,20 +190,20 @@ router.post(
         languageCode: language,       // クライアントから送信された言語
         fileUrl: product.fileUrl,
         fileType: product.fileType,
-        htmlContent: htmlContent,
+        htmlContent, // PDFの場合は変換後 HTML の URL
         isOriginal: true,
       });
 
       res.status(201).json({ message: 'Product uploaded successfully.', product });
     } catch (error) {
-      console.error('File upload or parsing error:', error);
+      console.error('File upload or conversion error:', error);
       res.status(500).json({ message: 'File upload failed.' });
     }
   }
 );
 
+// 以下、既存の GET ルート等はそのまま利用
 
-// 以下のルートはそのまま利用（必要に応じて versionData の参照部分は修正済みの新カラムを使う）
 router.get('/list', authenticateToken, async (req: Request, res: Response): Promise<void> => {
   try {
     const products = await Product.findAll({
@@ -316,69 +340,6 @@ router.get('/:id',
     }
   }
 );
-
-// ルート: 商品翻訳の処理（指定言語に翻訳し、DBに保存する）
-// ※ 翻訳されたテキストも "text" として管理する
-router.post('/:id/translate',
-  authenticateToken,
-  authorizeRoles('provider', 'editor', 'subscriber'),
-  checkSubscription('ai_usage_limit'),
-  async (req: Request, res: Response): Promise<void> => {
-    const { id } = req.params;
-    const { languageCode } = req.body;
-    if (!languageCode) {
-      res.status(400).json({ message: 'languageCodeが必要です。' });
-      return;
-    }
-    try {
-      console.log('Fetching product with ID:', id);
-      const product = await Product.findByPk(Number(id), {
-        attributes: ['id', 'title', 'description', 'htmlContent'],
-      });
-      if (!product) {
-        res.status(404).json({ message: '商材が見つかりませんでした。' });
-        return;
-      }
-      console.log('Product found:', product);
-      // 既存の翻訳済みバージョンは "text" として管理
-      const existingVersion = await ProductVersion.findOne({
-        where: { productId: Number(id), dataType: 'text', languageCode },
-      });
-      if (existingVersion) {
-        // ここは既存データの返却処理（必要に応じて実装）
-        res.status(200).json({
-          translatedHtmlContent: existingVersion.htmlContent,
-        });
-        return;
-      }
-      const translationService = AIFactory.getTranslationService();
-      console.log('Translating title:', product.title);
-      const translatedTitle = await translationService.translate(product.title, languageCode);
-      console.log('Translating description:', product.description);
-      const translatedDescription = await translationService.translate(product.description, languageCode);
-      const translatedHtmlContent = product.htmlContent
-        ? await translationService.translate(product.htmlContent, languageCode)
-        : null;
-      // 翻訳結果は、タイトルや説明は商品側に保持されているため、ここでは htmlContent のみを対象とする
-      const newVersion = await ProductVersion.create({
-        productId: Number(id),
-        dataType: 'text', // 翻訳されたテキストは "text" として保存
-        languageCode,
-        fileUrl: null,    // テキスト版には URL は不要
-        fileType: null,
-        htmlContent: translatedHtmlContent,
-        isOriginal: false,
-      });
-      console.log('Translated version saved:', newVersion);
-      res.status(201).json({
-        translatedHtmlContent,
-      });
-    } catch (error) {
-      console.error('Error in translation process:', error);
-      res.status(500).json({ message: 'Failed to process translation request.' });
-    }
-  });
-
 
 router.delete(
   '/:id',

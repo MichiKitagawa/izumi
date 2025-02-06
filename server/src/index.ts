@@ -15,6 +15,8 @@ import adRoutes from './routes/ad';
 import helmet from 'helmet';
 import bodyParser from 'body-parser';
 import './utils/scheduler';
+import aiConversionRouter from './routes/aiConversion';
+
 
 dotenv.config();
 
@@ -58,6 +60,7 @@ app.use('/api/subscription', subscriptionRoutes);  // ※ Webhook用は上記で
 app.use('/api/ai', aiRoutes);
 app.use('/api/download', downloadRoutes);
 app.use('/api/ad', adRoutes);
+app.use('/api/ai', aiConversionRouter);
 
 // 基本ルートの定義
 app.get('/', (req, res) => {
